@@ -328,24 +328,21 @@ async function buildModel(){
   const s_pa=col(sH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул продавца','Предмет;Артикул'),s_qty=col(sH,'ШТ поставлено','ШТ');
   const shtByPA={}; const shtRaw={}; raw.sht.forEach(r=>{ const k=nk(r[s_pa]); if(k){shtByPA[k]=(shtByPA[k]||0)+intn(r[s_qty]); if(!shtRaw[k])shtRaw[k]=(r[s_pa]||'').trim();} });
 
-  /* расход(перем): Перемен = Переменные / ШТ поставлено */
-  const peremByPA={}; let matched=0,total=0; const unmatched=[];
-  const perRaw={}; xRows.forEach(r=>{ const k=nk(r.pa); if(k&&!perRaw[k])perRaw[k]=(r.pa||'').trim(); });
-  Object.keys(perByPA).forEach(k=>{ total++; const shtQ=shtByPA[k]||0;
-    if(shtQ){matched++; peremByPA[k]=Math.round(perByPA[k]/shtQ);} else { peremByPA[k]=0; if(unmatched.length<3)unmatched.push(perRaw[k]||k); } });
-  /* делаем перемен-на-штуку находимым по ОБЕИМ формам ключа (глубина / поставщик),
-     сопоставляя через справочник артикулов — не важно, какой формой ключа приходят продажи */
+  /* ── Переменные (логика №3): Расход-ШТ из «экон» × Выкуп,шт ── */
+  const eH=raw.ekon&&raw.ekon._headers||[];
+  const e_pa=col(eH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул','Сцепка'),
+        e_rs=col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ','Расход_ШТ');
+  const perUnit={}; const ekonRaw={};
+  (raw.ekon||[]).forEach(r=>{ const k=nk(r[e_pa]); if(k){ perUnit[k]=num(r[e_rs]); if(!ekonRaw[k])ekonRaw[k]=(r[e_pa]||'').trim(); } });
+  /* находимо по обеим формам ключа (глубина / поставщик) через справочник */
   artDim.forEach(a=>{ const kP=nk(a.paP),kG=nk(a.paG);
-    const v=(peremByPA[kP]!==undefined&&peremByPA[kP]!==0)?peremByPA[kP]:((peremByPA[kG]!==undefined&&peremByPA[kG]!==0)?peremByPA[kG]:undefined);
-    if(v!==undefined){ peremByPA[kP]=v; peremByPA[kG]=v; } });
-  const shtKeys=Object.keys(shtByPA), perKeys=Object.keys(perByPA);
-  const totSht=shtKeys.reduce((s,k)=>s+shtByPA[k],0), totPer=perKeys.reduce((s,k)=>s+perByPA[k],0);
+    const v=(perUnit[kP]!==undefined)?perUnit[kP]:(perUnit[kG]!==undefined?perUnit[kG]:undefined);
+    if(v!==undefined){ perUnit[kP]=v; perUnit[kG]=v; } });
+  const ekonKeys=Object.keys(perUnit);
   const smp=(arr,map)=>arr.slice(0,3).map(k=>map[k]||k).join('  ┃  ')||'—';
-  diag.push({name:'ШТ-сопоставление',status:matched?(matched<total*0.5?'warn':'ok'):'err',rows:matched,
-    msg:`${matched} из ${total} артикулов · ΣШТ=${Math.round(totSht).toLocaleString('ru-RU')} · Σ переменных(до÷шт)=${Math.round(totPer).toLocaleString('ru-RU')}`});
-  diag.push({name:'  ключи «расход(перем)»',status:'warn',rows:perKeys.length,msg:smp(perKeys,perRaw)});
-  diag.push({name:'  ключи «ШТУК»',status:'warn',rows:shtKeys.length,msg:smp(shtKeys,shtRaw)});
-  if(unmatched.length)diag.push({name:'  без ШТ (примеры)',status:'warn',rows:0,msg:unmatched.join('  ┃  ')});
+  diag.push({name:'экон Расход-ШТ',status:(e_rs&&ekonKeys.length)?'ok':'err',rows:ekonKeys.length,
+    msg:e_rs?`колонка «${e_rs}» · ${ekonKeys.length} артикулов`:'колонка «Расход-ШТ» не найдена — проверьте лист экон'});
+  diag.push({name:'  ключи «экон»',status:'warn',rows:ekonKeys.length,msg:smp(ekonKeys,ekonRaw)});
 
   /* Лог+Хран */
   const lH=raw.log._headers||[];
@@ -369,7 +366,7 @@ async function buildModel(){
   acGroup.forEach(r=>comb.push({date:r.date,paG:r.paG}));
   const ob=groupBy(comb.filter(r=>r.date),r=>keyDP(r.date,r.paG),rs=>{
     const paG=rs[0].paG,date=rs[0].date;
-    const vyks=sum(rs,'vyks'); const perem=Math.round((peremByPA[nk(paG)]||0)*vyks);
+    const vyks=sum(rs,'vyks'); const perem=Math.round((perUnit[nk(paG)]||0)*vyks);
     return {paG,y:date.getFullYear(),m:date.getMonth()+1,
       zaks:sum(rs,'zaks'),vyks,zakr:sum(rs,'zakr'),vykr:sum(rs,'vykr'),
       rek:sum(rs,'rek'),post:sum(rs,'post'),nalog:sum(rs,'nalog'),hran:sum(rs,'hran'),dost:sum(rs,'dost'),perem};
