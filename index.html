@@ -6,117 +6,141 @@
 <title>P&L продаж — дашборд</title>
 <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#F0EBE1;--bg2:#E8E1D4;--bg3:#FAF8F4;--card:#FFF;--border:rgba(160,148,128,.25);--border2:rgba(160,148,128,.45);--ink:#1A1610;--ink2:#6B6357;--ink3:#A09688;--green:#2D7A4F;--red:#B84040;--amber:#A06820;--blue:#005BFF;--sgp:#5B3FA0;--raw:#8B4513;--hl:#FBF3D6;--hl2:#F4E9C4;}
+:root{--bg:#F0EBE1;--bg2:#E8E1D4;--bg3:#FAF8F4;--card:#FFF;--border:rgba(160,148,128,.25);--border2:rgba(160,148,128,.45);--ink:#1A1610;--ink2:#6B6357;--ink3:#A09688;--green:#2D7A4F;--red:#B84040;--amber:#A06820;--blue:#005BFF;--hl:#FBF3D6;--hl2:#F4E9C4;--py:#7C6F55;}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Comfortaa',sans-serif;background:var(--bg);color:var(--ink);font-size:13px}
-.header{background:var(--bg2);border-bottom:1px solid var(--border2);padding:0 20px;height:60px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
-.logo{width:38px;height:38px;border-radius:10px;background:var(--ink);color:var(--bg3);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
-.bname{font-size:16px;font-weight:700}.bsub{font-size:9px;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase}
+.header{background:var(--bg2);border-bottom:1px solid var(--border2);padding:0 16px;height:56px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--ink);color:var(--bg3);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.bname{font-size:15px;font-weight:700}.bsub{font-size:8px;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase}
+.tabs{display:flex;gap:2px;background:var(--bg);border-radius:8px;padding:3px;margin-left:14px}
+.tab{padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:0;color:var(--ink3);font-family:inherit;white-space:nowrap}
+.tab.on{background:var(--ink);color:var(--bg3)}
 .hright{margin-left:auto;display:flex;align-items:center;gap:8px}
-.clock{font-size:12px;color:var(--ink2);white-space:nowrap}
-.b{padding:6px 12px;background:0;border:1px solid var(--border2);border-radius:7px;font-size:11px;font-weight:600;color:var(--ink2);cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.clock{font-size:11px;color:var(--ink2);white-space:nowrap}
+.b{padding:6px 11px;background:0;border:1px solid var(--border2);border-radius:7px;font-size:11px;font-weight:600;color:var(--ink2);cursor:pointer;font-family:inherit;white-space:nowrap}
 .b:hover{background:var(--ink);color:var(--bg3);border-color:var(--ink)}.b:disabled{opacity:.4;cursor:default}
 .b.pri{background:var(--ink);color:var(--bg3);border-color:var(--ink)}
-/* settings overlay */
+.b.act{background:var(--amber);color:#fff;border-color:var(--amber)}
+/* settings */
 .sov{display:none;position:fixed;inset:0;background:rgba(240,235,225,.95);backdrop-filter:blur(6px);z-index:200;align-items:center;justify-content:center}
 .sov.show{display:flex}
-.sc{background:var(--card);border:1px solid var(--border2);border-radius:16px;padding:28px;width:560px;box-shadow:0 8px 40px rgba(0,0,0,.1);max-height:92vh;overflow-y:auto}
+.sc{background:var(--card);border:1px solid var(--border2);border-radius:16px;padding:26px;width:560px;box-shadow:0 8px 40px rgba(0,0,0,.1);max-height:92vh;overflow-y:auto}
 .slogo{display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.stitle{font-size:20px;font-weight:700}.ssub{font-size:10px;color:var(--ink3);letter-spacing:.1em;text-transform:uppercase}
+.stitle{font-size:19px;font-weight:700}.ssub{font-size:10px;color:var(--ink3);letter-spacing:.1em;text-transform:uppercase}
 .sinfo{font-size:11px;color:var(--ink2);line-height:1.5;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:14px 0}
 .ssec{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.fg{margin-bottom:10px}
-.fl{font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:700;display:flex;justify-content:space-between}
-.fl .opt{color:var(--amber)}
+.fg{margin-bottom:9px}
+.fl{font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:700}.fl .opt{color:var(--amber)}
 .fi{width:100%;padding:8px 12px;font-size:11px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--ink);font-family:inherit;outline:0}
 .fi:focus{border-color:var(--ink)}
 .sbtn{width:100%;padding:12px;background:var(--ink);color:var(--bg3);border:0;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px}
 .smsg{font-size:12px;margin-top:10px;text-align:center;white-space:pre-line}.smsg.err{color:var(--red)}.smsg.ok{color:var(--green)}
 /* layout */
-.main{padding:20px;max-width:1780px;margin:0 auto}
-.fbar{background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:12px 16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.04);display:flex;flex-wrap:wrap;gap:14px;align-items:center}
-.fitem{display:flex;align-items:center;gap:8px}
-.fitem>label{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
-.sel{padding:6px 10px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--ink);font-family:inherit;outline:0;cursor:pointer}
+.main{padding:14px 16px;max-width:2000px;margin:0 auto}
+.fbar{background:var(--card);border:1px solid var(--border2);border-radius:11px;padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.fitem{display:flex;align-items:center;gap:7px}
+.fitem>label{font-size:10px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
+.sel{padding:5px 9px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--ink);font-family:inherit;outline:0;cursor:pointer}
 .sel:focus{border-color:var(--ink)}
-.search{padding:6px 10px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--ink);font-family:inherit;outline:0;min-width:220px}
-.search:focus{border-color:var(--ink)}
-.fspacer{margin-left:auto;font-size:11px;color:var(--ink3)}
-/* kpi cards */
-.mg{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
-.mc{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
-.ml{font-size:9px;color:var(--ink3);text-transform:uppercase;letter-spacing:.12em;font-weight:700;margin-bottom:8px}
-.mv{font-size:26px;font-weight:700;line-height:1}.mv.g{color:var(--green)}.mv.r{color:var(--red)}
-.md{font-size:11px;margin-top:6px;color:var(--ink3)}.md .du{color:var(--green);font-weight:700}.md .dd{color:var(--red);font-weight:700}
-/* section */
-.sec{margin-bottom:22px}
-.sh{display:flex;align-items:center;justify-content:space-between;padding-bottom:8px;margin-bottom:12px;border-bottom:1px solid var(--border2);flex-wrap:wrap;gap:8px}
-.st{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.12em}
+.search{padding:5px 9px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--ink);font-family:inherit;outline:0;min-width:200px}
+.ctog{display:inline-flex;background:var(--bg);border-radius:7px;padding:2px;gap:1px}
+.ctog button{padding:5px 11px;border:0;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;background:0;color:var(--ink3)}
+.ctog button.on{background:var(--ink);color:var(--bg3)}
+.fspacer{margin-left:auto;font-size:10px;color:var(--ink3)}
+/* kpi */
+.mg{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.mc{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:12px 15px}
+.ml{font-size:9px;color:var(--ink3);text-transform:uppercase;letter-spacing:.12em;font-weight:700;margin-bottom:6px}
+.mv{font-size:23px;font-weight:700;line-height:1}.mv.g{color:var(--green)}.mv.r{color:var(--red)}
+.md{font-size:11px;margin-top:5px;color:var(--ink3)}.md .du{color:var(--green);font-weight:700}.md .dd{color:var(--red);font-weight:700}
+/* section/table */
+.sec{margin-bottom:16px}
+.sh{display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;margin-bottom:9px;border-bottom:1px solid var(--border2);flex-wrap:wrap;gap:8px}
+.st{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.1em}
 .sm2{font-size:11px;color:var(--ink3)}
-/* table */
-.sw{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow-x:auto}
+.sw{background:var(--card);border:1px solid var(--border);border-radius:11px;overflow-x:auto}
 table{width:100%;border-collapse:collapse}
-thead th{text-align:right;padding:8px 10px;font-size:9px;font-weight:700;color:var(--ink3);background:var(--bg3);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);font-family:inherit;white-space:nowrap;position:sticky;top:0;z-index:5}
+thead th{text-align:right;padding:5px 7px;font-size:8.5px;font-weight:700;color:var(--ink3);background:var(--bg3);text-transform:uppercase;letter-spacing:.02em;border-bottom:1px solid var(--border);font-family:inherit;white-space:nowrap;position:sticky;top:0;z-index:5;line-height:1.15}
 thead th:first-child{text-align:left}
 thead th.hl{background:var(--hl2)!important;color:var(--amber)!important}
-tbody td{padding:6px 10px;color:var(--ink);border-bottom:1px solid var(--border);vertical-align:middle;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+thead th.py{color:var(--py)!important;font-style:italic}
+tbody td{padding:4px 7px;color:var(--ink);border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:11.5px;position:relative}
 tbody td:first-child{text-align:left;font-weight:700;color:var(--ink2)}
 tbody tr:hover{background:var(--bg3)}
 tbody td.hl{background:var(--hl)}
+tbody td.py{color:var(--py);font-size:10.5px;background:rgba(124,111,85,.05)}
 tbody tr.total td{font-weight:700;background:var(--bg2)!important;border-top:2px solid var(--border2);border-bottom:0}
 tbody tr.empty td{color:var(--ink3)}
 .pos{color:var(--green)}.neg{color:var(--red)}
-.barcell{position:relative}
-.barwrap{display:flex;align-items:center;justify-content:flex-end;gap:6px}
-.dbw{position:relative;background:var(--bg2);border-radius:3px;height:16px;flex:1;max-width:90px;overflow:hidden;min-width:30px}
-.db{position:absolute;top:0;bottom:0;right:0;border-radius:3px;opacity:.55}
-.db.bl{background:var(--blue)}.db.g{background:var(--green)}.db.r{background:var(--red)}
-.barval{min-width:64px}
-/* metric selector */
-.msel{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.ctog{display:inline-flex;background:var(--bg);border-radius:6px;padding:2px;gap:1px}
-.ctog button{padding:4px 12px;border:0;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;background:0;color:var(--ink3)}
-.ctog button.on{background:var(--ink);color:var(--bg3)}
-/* diagnostics */
+.bar{position:absolute;top:2px;bottom:2px;right:2px;border-radius:3px;opacity:.28;z-index:0}
+.bar.bl{background:var(--blue)}.bar.g{background:var(--green)}.bar.r{background:var(--red)}
+td span.v{position:relative;z-index:1}
+/* charts (Прибыль) */
+.chartgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.chartbox{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:14px 16px}
+.chartttl{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+.barrow{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:11px}
+.barrow .lbl{width:120px;color:var(--ink2);font-weight:600;flex-shrink:0}
+.barrow .track{flex:1;background:var(--bg3);border-radius:4px;height:20px;position:relative;overflow:hidden}
+.barrow .fill{position:absolute;top:0;bottom:0;left:0;border-radius:4px;background:var(--green)}
+.barrow .fill.neg{background:var(--red)}
+.barrow .num{width:90px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.mom{display:flex;gap:3px;align-items:flex-end;height:130px;padding-top:18px}
+.momcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px}
+.mombars{display:flex;gap:2px;align-items:flex-end;height:90px}
+.mombars .mb{width:11px;border-radius:2px 2px 0 0}
+.mombars .cur{background:var(--green)}.mombars .prv{background:#B7D9C4}
+/* diag */
 .diag{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:8px;font-size:11px;color:var(--ink2);display:none}
 .diag.show{display:block}
-.diag table{width:auto}.diag td{border:0;padding:2px 12px 2px 0;text-align:left;white-space:nowrap}
+.diag table{width:auto}.diag td{border:0;padding:2px 14px 2px 0;text-align:left;white-space:nowrap;position:static}
 .diag .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .dot.ok{background:var(--green)}.dot.warn{background:var(--amber)}.dot.err{background:var(--red)}
 .lm{padding:60px;text-align:center;color:var(--ink3)}
 .loadbtn{margin-top:12px;padding:8px 18px;background:var(--ink);color:var(--bg3);border:0;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit}
-@media(max-width:900px){.mg{grid-template-columns:repeat(2,1fr)}}
+.scaffold{background:var(--card);border:1px dashed var(--border2);border-radius:11px;padding:24px;color:var(--ink3);font-size:12px;line-height:1.6}
+@media(max-width:900px){.mg{grid-template-columns:repeat(2,1fr)}.chartgrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 
-<!-- ══════════ SETTINGS ══════════ -->
+<!-- SETTINGS -->
 <div class="sov" id="setup">
   <div class="sc">
     <div class="slogo"><div class="logo">P&L</div><div><div class="stitle">P&amp;L продаж</div><div class="ssub">Google Sheets Dashboard</div></div></div>
-    <div class="sinfo">Приложение читает опубликованные Google-таблицы напрямую (publish-to-web CSV). Ссылки хранятся только в этом браузере (localStorage) и не попадают в код. Обязательны первые 6 источников; последние 2 — для дополнительных мер.</div>
+    <div class="sinfo">Данные идут через твой Cloudflare Worker по паролю. Ссылки на таблицы лежат в секретах воркера — в этой странице их нет. Пароль хранится только в этом браузере (localStorage).</div>
+    <div class="ssec">Доступ через Worker</div>
+    <div class="fg"><div class="fl">URL воркера</div><input class="fi" id="u_worker" placeholder="https://pl-proxy.…workers.dev"></div>
+    <div class="fg"><div class="fl">Пароль</div><input class="fi" id="u_pass" type="password" placeholder="ACCESS_PASSWORD"></div>
 
-    <div class="ssec">Основные источники</div>
-    <div class="fg"><div class="fl">report — запрос «2» (заказы/выкупы/налог)</div><input class="fi" id="u_report" placeholder="https://…/pub?gid=…&output=csv"></div>
-    <div class="fg"><div class="fl">расход</div><input class="fi" id="u_rashod" placeholder="https://…/pub?gid=…&output=csv"></div>
-    <div class="fg"><div class="fl">артикулы</div><input class="fi" id="u_art" placeholder="https://…/pub?gid=…&output=csv"></div>
-    <div class="fg"><div class="fl">Лог+Хран</div><input class="fi" id="u_log" placeholder="https://…/pub?gid=…&output=csv"></div>
-    <div class="fg"><div class="fl">ШТУК</div><input class="fi" id="u_sht" placeholder="https://…/pub?gid=…&output=csv"></div>
-    <div class="fg"><div class="fl">Acruals</div><input class="fi" id="u_acr" placeholder="https://…/pub?gid=…&output=csv"></div>
-
-    <div class="ssec">Дополнительные <span style="color:var(--amber);text-transform:none;letter-spacing:0">(опционально)</span></div>
-    <div class="fg"><div class="fl">ПОСТ затраты архив <span class="opt">для Fix.CPO</span></div><input class="fi" id="u_post" placeholder="необязательно"></div>
-    <div class="fg"><div class="fl">экон <span class="opt">для U.* мер</span></div><input class="fi" id="u_ekon" placeholder="необязательно"></div>
-
+    <div class="ssec" style="cursor:pointer" onclick="document.getElementById('directBox').style.display=document.getElementById('directBox').style.display==='none'?'block':'none'">▸ Прямые ссылки <span class="opt" style="text-transform:none;letter-spacing:0">(только локальная отладка — не для публичного GitHub!)</span></div>
+    <div id="directBox" style="display:none">
+      <div class="fg"><div class="fl">report</div><input class="fi" id="u_report"></div>
+      <div class="fg"><div class="fl">расход</div><input class="fi" id="u_rashod"></div>
+      <div class="fg"><div class="fl">артикулы</div><input class="fi" id="u_art"></div>
+      <div class="fg"><div class="fl">Лог+Хран</div><input class="fi" id="u_log"></div>
+      <div class="fg"><div class="fl">ШТУК</div><input class="fi" id="u_sht"></div>
+      <div class="fg"><div class="fl">Acruals</div><input class="fi" id="u_acr"></div>
+      <div class="fg"><div class="fl">ПОСТ затраты архив <span class="opt">Fix.CPO</span></div><input class="fi" id="u_post"></div>
+      <div class="fg"><div class="fl">экон <span class="opt">U.* меры</span></div><input class="fi" id="u_ekon"></div>
+    </div>
     <button class="sbtn" onclick="saveAndLoad()">Сохранить и загрузить</button>
     <div class="smsg" id="smsg"></div>
   </div>
 </div>
 
-<!-- ══════════ HEADER ══════════ -->
+<!-- HEADER -->
 <div class="header">
   <div class="logo">P&L</div>
-  <div><div class="bname">P&amp;L продаж за год</div><div class="bsub">Wildberries · дашборд</div></div>
+  <div><div class="bname">P&amp;L продаж</div><div class="bsub">Wildberries</div></div>
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-p="pl" onclick="tab('pl')">P&amp;L</button>
+    <button class="tab" data-p="profit" onclick="tab('profit')">Прибыль</button>
+    <button class="tab" data-p="adv" onclick="tab('adv')">Реклама</button>
+    <button class="tab" data-p="log" onclick="tab('log')">Логистика</button>
+    <button class="tab" data-p="fix" onclick="tab('fix')">Пост.Р</button>
+    <button class="tab" data-p="check" onclick="tab('check')">Чек</button>
+  </div>
   <div class="hright">
     <div class="clock" id="clk"></div>
     <button class="b" onclick="toggleDiag()">◧ диагностика</button>
@@ -125,558 +149,460 @@ tbody tr.empty td{color:var(--ink3)}
   </div>
 </div>
 
-<!-- ══════════ MAIN ══════════ -->
 <div class="main">
+  <!-- FILTER BAR -->
   <div class="fbar" id="fbar" style="display:none">
     <div class="fitem"><label>Год</label><select class="sel" id="fYear" onchange="render()"></select></div>
     <div class="fitem"><label>Месяц</label><select class="sel" id="fMonth" onchange="render()"><option value="">Все</option></select></div>
-    <div class="fitem"><label>Артикул</label><input class="search" id="fSearch" placeholder="Предмет;Артикул.Глубина…" oninput="debouncedRender()"></div>
+    <div class="fitem"><label>Артикул</label><input class="search" id="fSearch" placeholder="поиск…" oninput="debouncedRender()"></div>
+    <div class="fitem" id="grpWrap"><label>Срез</label><div class="ctog" id="grp">
+      <button class="on" data-g="month" onclick="setGrp('month')">Месяц</button>
+      <button data-g="predmet" onclick="setGrp('predmet')">Предмет</button>
+      <button data-g="artikul" onclick="setGrp('artikul')">Артикул</button>
+    </div></div>
+    <div class="fitem" id="pyWrap"><button class="b" id="pyBtn" onclick="togglePY()">＋ прошлый год</button></div>
     <div class="fspacer" id="fInfo"></div>
   </div>
 
-  <div id="kpi" class="mg" style="display:none"></div>
-
-  <div class="sec" id="matrixSec" style="display:none">
-    <div class="sh"><div class="st">P&amp;L по месяцам</div><div class="sm2" id="matrixSub"></div></div>
-    <div class="sw"><table id="matrix"></table></div>
-    <div class="diag" id="diag"></div>
-  </div>
-
-  <div class="sec" id="metricSec" style="display:none">
-    <div class="sh">
-      <div class="st">Показатель по месяцам</div>
-      <div class="msel">
-        <select class="sel" id="mMetric" onchange="renderMetric()"></select>
-        <div class="ctog">
-          <button id="mgTot" class="on" onclick="setMetricMode('total')">Итого</button>
-          <button id="mgUnit" onclick="setMetricMode('unit')">На штуку</button>
-        </div>
-      </div>
+  <!-- PL PAGE -->
+  <div id="page-pl">
+    <div id="kpi" class="mg" style="display:none"></div>
+    <div class="sec" id="matrixSec" style="display:none">
+      <div class="sh"><div class="st" id="matrixTtl">P&amp;L по месяцам</div><div class="sm2" id="matrixSub"></div></div>
+      <div class="sw"><table id="matrix"></table></div>
+      <div class="diag" id="diag"></div>
     </div>
-    <div class="sw"><table id="metricTbl"></table></div>
   </div>
 
-  <div id="placeholder" class="lm">
-    ⚙ Укажите ссылки на таблицы в настройках
-    <div><button class="loadbtn" onclick="openSetup()">Открыть настройки</button></div>
-  </div>
+  <!-- other pages -->
+  <div id="page-profit" style="display:none"></div>
+  <div id="page-adv" style="display:none"></div>
+  <div id="page-log" style="display:none"></div>
+  <div id="page-fix" style="display:none"></div>
+  <div id="page-check" style="display:none"></div>
+
+  <div id="placeholder" class="lm">⚙ Укажите ссылки в настройках<div><button class="loadbtn" onclick="openSetup()">Открыть настройки</button></div></div>
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════════════════════════
-   P&L Dashboard — перенос модели Power BI (Power Query + DAX) в браузер
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* ---------- предзаполненные ссылки (можно менять в настройках) ---------- */
-const DEFAULTS = {
-  report:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRHmDOfUKYgGrjZl6iocQ-gkkXET4_Ts7fw7dYIBB9_nGk-_KCU8pjnFoawiqbjZEZBHTgtJubJm3lT/pub?gid=1646776592&single=true&output=csv',
-  rashod:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRd-F9AS2AOqG3-_39PX6jHwU-5fYDYuojWhuz07tZM7qkIxxCZriy-fQiqxmwYPFm3Za82g-dU1T7B/pub?gid=103296320&single=true&output=csv',
-  art:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRd-F9AS2AOqG3-_39PX6jHwU-5fYDYuojWhuz07tZM7qkIxxCZriy-fQiqxmwYPFm3Za82g-dU1T7B/pub?gid=1840530356&single=true&output=csv',
-  log:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRd-F9AS2AOqG3-_39PX6jHwU-5fYDYuojWhuz07tZM7qkIxxCZriy-fQiqxmwYPFm3Za82g-dU1T7B/pub?gid=432952907&single=true&output=csv',
-  sht:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRd-F9AS2AOqG3-_39PX6jHwU-5fYDYuojWhuz07tZM7qkIxxCZriy-fQiqxmwYPFm3Za82g-dU1T7B/pub?gid=1547817269&single=true&output=csv',
-  acr:'https://docs.google.com/spreadsheets/d/e/2PACX-1vQA9vlIPPNdSKvYYm_aloouLC13p2KN7-wVGXSZ64KKR6bKCyDeBPhPhtJj3OoeZ5O_ynjIa-6wG2pp/pub?gid=1878612282&single=true&output=csv',
-  post:'', ekon:''
-};
-const LS_KEY='pl_cfg_v1';
+/* ═══════════ CONFIG ═══════════ */
+/* НИКАКИХ ссылок на таблицы в коде — они в секретах воркера.
+   Здесь только пусто: конфиг вводится в «Настройках» и хранится в localStorage этого браузера. */
+const DEFAULTS={ worker:'', pass:'', report:'',rashod:'',art:'',log:'',sht:'',acr:'',post:'',ekon:'' };
+const LS_KEY='pl_cfg_v3';
 let CFG={...DEFAULTS};
-
 const MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-
-/* ---------- модель (заполняется после загрузки) ---------- */
-let M={obshiy:[], acruals:[], years:[], loaded:false, diag:[]};
+let M={obshiy:[],acruals:[],postR:[],years:[],loaded:false,diag:[],artByPaG:{}};
+let grpMode='month', pyOn=false, curTab='pl';
 
 /* ═══════════ ПАРСЕРЫ ═══════════ */
 function parseCSV(text){
-  const rows=[]; let row=[], field='', q=false;
-  text=text.replace(/\r/g,'');
-  for(let i=0;i<text.length;i++){
-    const c=text[i];
-    if(q){
-      if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else q=false; }
-      else field+=c;
-    } else {
-      if(c==='"') q=true;
-      else if(c===','){ row.push(field); field=''; }
-      else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
-      else field+=c;
-    }
+  const rows=[];let row=[],field='',q=false;text=text.replace(/\r/g,'');
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else q=false; } else field+=c; }
+    else { if(c==='"')q=true; else if(c===','){row.push(field);field='';} else if(c==='\n'){row.push(field);rows.push(row);row=[];field='';} else field+=c; }
   }
-  if(field!==''||row.length){ row.push(field); rows.push(row); }
-  return rows;
+  if(field!==''||row.length){row.push(field);rows.push(row);} return rows;
 }
-/* PromoteHeaders → массив объектов */
 function toObjects(rows){
-  if(!rows.length) return [];
-  const hdr=rows[0].map(h=>String(h).trim());
-  const out=[];
-  for(let i=1;i<rows.length;i++){
-    const r=rows[i]; if(r.every(c=>String(c).trim()==='')) continue;
-    const o={}; hdr.forEach((h,j)=>o[h]=r[j]!==undefined?r[j]:''); out.push(o);
-  }
+  if(!rows.length)return[]; const hdr=rows[0].map(h=>String(h).trim()); const out=[];
+  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(r.every(c=>String(c).trim()===''))continue;
+    const o={}; hdr.forEach((h,j)=>o[h]=r[j]!==undefined?r[j]:''); out.push(o); }
   out._headers=hdr; return out;
 }
-/* число: "1 234,56" / "1,234.56" / "12%" / "₽" / NBSP */
-function num(v){
-  if(v===null||v===undefined) return 0;
-  if(typeof v==='number') return v;
-  let s=String(v).trim(); if(s===''||s==='-') return 0;
-  s=s.replace(/[\s\u00a0\u202f₽%]/g,'');
-  const hasDot=s.includes('.'), hasCom=s.includes(',');
-  if(hasDot&&hasCom){ s=s.replace(/,/g,''); }           // 1,234.56
-  else if(hasCom){                                       // 1234,56  или 1,234
-    const parts=s.split(',');
-    if(parts[parts.length-1].length===3 && parts.length>1 && parts[0].length<=3){ s=s.replace(/,/g,''); } // тысячи
-    else s=s.replace(',', '.');                          // десятичная
-  }
+function num(v){ if(v==null)return 0; if(typeof v==='number')return v;
+  let s=String(v).trim(); if(s===''||s==='-')return 0; s=s.replace(/[\s\u00a0\u202f₽%]/g,'');
+  const hasDot=s.includes('.'),hasCom=s.includes(',');
+  if(hasDot&&hasCom)s=s.replace(/,/g,'');
+  else if(hasCom){ const p=s.split(','); if(p[p.length-1].length===3&&p.length>1&&p[0].length<=3)s=s.replace(/,/g,''); else s=s.replace(',','.'); }
   const n=parseFloat(s); return isNaN(n)?0:n;
 }
-function intn(v){ return Math.round(num(v)); }
-/* дата → Date */
-function pdate(v){
-  if(v instanceof Date) return v;
-  if(v===null||v===undefined) return null;
-  let s=String(v).trim(); if(!s) return null;
-  let m;
-  if(m=s.match(/^Date\((\d+),(\d+),(\d+)/)) return new Date(+m[1],+m[2],+m[3]); // gviz
-  if(m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)) return new Date(+m[1],+m[2]-1,+m[3]);
-  if(m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/)) return new Date(+m[3],+m[2]-1,+m[1]); // dd.mm.yyyy
-  if(m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)){ // Google en: mm/dd/yyyy (но если >12 — dd/mm)
-    let a=+m[1],b=+m[2]; if(a>12){return new Date(+m[3],b-1,a);} return new Date(+m[3],a-1,b);
-  }
-  const d=new Date(s); return isNaN(d)?null:d;
+const intn=v=>Math.round(num(v));
+function pdate(v){ if(v instanceof Date)return v; if(v==null)return null;
+  let s=String(v).trim(); if(!s)return null; let m,d=null;
+  if(m=s.match(/^Date\((\d+),(\d+),(\d+)/))d=new Date(+m[1],+m[2],+m[3]);
+  else if(m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))d=new Date(+m[1],+m[2]-1,+m[3]);
+  else if(m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/))d=new Date(+m[3],+m[2]-1,+m[1]);
+  else if(m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)){let a=+m[1],b=+m[2]; d=a>12?new Date(+m[3],b-1,a):new Date(+m[3],a-1,b);}
+  else { const t=new Date(s); d=isNaN(t)?null:t; }
+  if(!d||isNaN(d))return null; const y=d.getFullYear(); if(y<2015||y>2100)return null; return d;
 }
-/* найти колонку по нормализованному имени (устойчиво к пробелам/регистру) */
-function col(headers, ...names){
+function col(headers,...names){
   const norm=h=>String(h).toLowerCase().replace(/[\s\u00a0]+/g,' ').replace(/["']/g,'').trim();
   const H=headers.map(h=>({raw:h,n:norm(h)}));
-  for(const nm of names){
-    const t=norm(nm);
-    let f=H.find(h=>h.n===t); if(f) return f.raw;
-  }
-  for(const nm of names){ // частичное
-    const t=norm(nm);
-    let f=H.find(h=>h.n.includes(t)||t.includes(h.n)); if(f) return f.raw;
-  }
+  for(const nm of names){const t=norm(nm);let f=H.find(h=>h.n===t);if(f)return f.raw;}
+  for(const nm of names){const t=norm(nm);let f=H.find(h=>h.n.includes(t)||t.includes(h.n));if(f)return f.raw;}
   return null;
 }
+/* нормализация ключа артикула для соединений */
+const nk=s=>String(s==null?'':s).toLowerCase().replace(/[\s\u00a0]+/g,'').replace(/["']/g,'').trim();
 
 /* ═══════════ ЗАГРУЗКА ═══════════ */
-async function fetchCSV(url){
-  const r=await fetch(url);
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  return toObjects(parseCSV(await r.text()));
+const SHEETS=['report','rashod','art','log','sht','acr','post','ekon'];
+const REQ=['report','rashod','art','log','sht','acr'];
+async function fetchCSVdirect(url){ const r=await fetch(url); if(!r.ok)throw new Error('HTTP '+r.status); return await r.text(); }
+
+/* Забирает CSV-тексты всех листов: через воркер (по паролю) либо по прямым ссылкам (локальная отладка) */
+async function loadRawTexts(diag){
+  const texts={};
+  if(CFG.worker){
+    const base=CFG.worker.replace(/\/+$/,'');
+    let resp;
+    try{ resp=await fetch(base+'?sheet=all',{headers:{'X-Access-Key':CFG.pass||''}}); }
+    catch(e){ throw new Error('Воркер недоступен: '+e.message); }
+    if(resp.status===401) throw new Error('Неверный пароль (401)');
+    if(!resp.ok) throw new Error('Воркер вернул '+resp.status);
+    let j; try{ j=await resp.json(); }catch(e){ throw new Error('Некорректный ответ воркера'); }
+    const data=j.data||{};
+    SHEETS.forEach(k=>{ texts[k]=data[k]||''; });
+    diag.push({name:'Worker',status:'ok',rows:0,msg:'источник: '+base});
+    return texts;
+  }
+  // прямые ссылки (fallback)
+  await Promise.all(SHEETS.filter(k=>CFG[k]).map(async k=>{
+    try{ texts[k]=await fetchCSVdirect(CFG[k]); }catch(e){ texts[k]=''; }
+  }));
+  SHEETS.forEach(k=>{ if(texts[k]===undefined)texts[k]=''; });
+  return texts;
 }
 
 async function buildModel(){
   const diag=[]; M.diag=diag;
-  const req={report:CFG.report,rashod:CFG.rashod,art:CFG.art,log:CFG.log,sht:CFG.sht,acr:CFG.acr};
-  const opt={post:CFG.post,ekon:CFG.ekon};
+  if(!CFG.worker && !CFG.report) throw new Error('Не задан ни воркер, ни прямые ссылки (см. Настройки).');
+  const texts=await loadRawTexts(diag);
   const raw={};
-  // грузим параллельно
-  const keys=Object.keys(req).concat(Object.keys(opt).filter(k=>opt[k]));
-  await Promise.all(keys.map(async k=>{
-    const url=req[k]||opt[k];
-    try{ raw[k]=await fetchCSV(url);
-      diag.push({name:k, status:'ok', rows:raw[k].length, cols:(raw[k]._headers||[]).length, headers:raw[k]._headers});
-    }catch(e){ raw[k]=[]; raw[k]._headers=[]; diag.push({name:k,status:req[k]?'err':'warn',rows:0,cols:0,msg:e.message}); }
-  }));
-  if(!raw.report.length||!raw.rashod.length){ throw new Error('Не загрузились обязательные листы (report/расход). Проверьте ссылки.'); }
+  SHEETS.forEach(k=>{ raw[k]=toObjects(parseCSV(texts[k]||''));
+    const need=REQ.includes(k);
+    diag.push({name:k,status:(raw[k].length?'ok':(need?'err':'warn')),rows:raw[k].length,cols:(raw[k]._headers||[]).length}); });
+  if(!raw.report.length||!raw.rashod.length) throw new Error('Не пришли обязательные листы (report/расход). Проверьте пароль и секреты воркера.');
 
-  /* ───── Артикул (dim) ───── */
+  /* Артикул dim */
   const aH=raw.art._headers||[];
-  const c_predmet=col(aH,'Предмет'), c_artpost=col(aH,'Артикул поставщика'), c_glub=col(aH,'Артикул.Глубина','Артикул Глубина');
-  const artByPost={}, artDim=[];
+  const c_pred=col(aH,'Предмет'),c_post=col(aH,'Артикул поставщика'),c_glub=col(aH,'Артикул.Глубина','Артикул Глубина'),c_new=col(aH,'Предмет_Новый','Предмет;Новый');
+  const artDim=[]; const artByPost=new Map(); const artByPredArt=new Map();
   raw.art.forEach(r=>{
-    const predmet=(r[c_predmet]||'').trim(), post=(r[c_artpost]||'').trim(), glub=(r[c_glub]||'').trim();
-    const paG=predmet+glub, paP=predmet+post;
-    if(paP===''||paP===';') return;
-    const rec={predmet,post,glub,paG,paP}; artDim.push(rec);
-    if(post) artByPost[predmet+'|'+post]=rec;               // для join «2»
+    const predmet=(r[c_pred]||'').trim(),post=(r[c_post]||'').trim(),glub=(r[c_glub]||'').trim(),pnew=c_new?(r[c_new]||'').trim():'';
+    const paG=predmet+glub, paP=predmet+post; if(paP===''||paP===';')return;
+    const rec={predmet,post,glub,pnew:pnew||predmet,paG,paP}; artDim.push(rec);
+    if(post)artByPost.set(nk(post),rec);
+    artByPredArt.set(nk(predmet)+'|'+nk(post),rec);
   });
-  // для Лог+Хран join по (Предмет,Артикул)
-  const artByPredArt={}; artDim.forEach(r=>{ artByPredArt[r.predmet+'|'+r.post]=r; });
+  M.artByPaG={}; artDim.forEach(a=>{ M.artByPaG[a.paG]=a; });
 
-  /* ───── «2» (report) ───── */
+  /* «2» */
   const rH=raw.report._headers;
   const r_post=col(rH,'Артикул поставщика'),
-        r_zakrub=col(rH,'Сумма заказов минус комиссия WB, руб.','Сумма заказов минус комиссия WB руб'),
-        r_zaksht=col(rH,'Заказано, шт.','Заказано шт'),
-        r_perech=col(rH,'К перечислению за товар, руб.','К перечислению за товар руб'),
-        r_vyksht=col(rH,'Выкупили, шт.','Выкупили шт'),
-        r_den=col(rH,'День','Дата');
-  const q2=[];
-  const TAX_DATE=new Date(2026,1,1); // 01.02.2026
+    r_zakr=col(rH,'Сумма заказов минус комиссия WB, руб.','Сумма заказов минус комиссия WB руб'),
+    r_zaks=col(rH,'Заказано, шт.','Заказано шт'),
+    r_per=col(rH,'К перечислению за товар, руб.','К перечислению за товар руб'),
+    r_vyks=col(rH,'Выкупили, шт.','Выкупили шт'),
+    r_den=col(rH,'День','Дата');
+  const TAX=new Date(2026,1,1); const q2=[];
   raw.report.forEach(r=>{
-    const post=(r[r_post]||'').trim(); const d=pdate(r[r_den]); if(!d) return;
-    const dim=artByPost[/*predmet unknown*/ null]; // join только по поставщику: ищем любой предмет с этим post
-    // join по "Артикул поставщика" → находим запись артикула
-    const found=artDim.find(a=>a.post===post);
-    const paG=found?found.paG:('' /*без предмета*/);
-    const perech=num(r[r_perech]);
-    const nalog=Math.round(perech*(d>=TAX_DATE?0.11:0.07));
-    q2.push({date:d, paG,
-      zaksht:intn(r[r_zaksht]), vyksht:intn(r[r_vyksht]),
-      zakrub:num(r[r_zakrub]), vykrub:perech, nalog});
+    const d=pdate(r[r_den]); if(!d)return; const post=(r[r_post]||'').trim();
+    const rec=artByPost.get(nk(post)); const paG=rec?rec.paG:('#'+post);
+    const perech=num(r[r_per]); const nalog=Math.round(perech*(d>=TAX?0.11:0.07));
+    q2.push({date:d,paG,zaks:intn(r[r_zaks]),vyks:intn(r[r_vyks]),zakr:num(r[r_zakr]),vykr:perech,nalog});
   });
 
-  /* ───── расход ───── */
+  /* расход построчно */
   const xH=raw.rashod._headers;
-  const x_date=col(xH,'Дата'),
-        x_pa=col(xH,'Предмет;Артикул продавца','Предмет;Артикул.Глубина','Предмет;Артикул поставщика'),
-        x_chto=col(xH,'Что'), x_grp=col(xH,'Что (группа)','Что группа'), x_sum=col(xH,'Сумма');
-  // построчно: Реклама/Постоянные/Переменные
-  const xRows=raw.rashod.map(r=>{
-    const summa=num(r[x_sum]);
-    const rek=(String(r[x_grp]||'').trim()==='Реклама')?summa:0;
-    const post=(String(r[x_chto]||'').trim()==='Пост расходы')?summa:0;
-    return {date:pdate(r[x_date]), pa:(r[x_pa]||'').trim(), summa, rek, post, per:summa-rek-post};
-  });
-  // группировка для Общий: (Дата, ПА) → Постоянные, Реклама
-  const xGroup=groupBy(xRows.filter(r=>r.date), r=>key(r.date,r.pa), rs=>({
-    date:rs[0].date, paG:rs[0].pa, post:sum(rs,'post'), rek:sum(rs,'rek')
-  }));
-  // группировка для расход(перем): ПА → Переменные
-  const perByPA={};
-  groupBy(xRows, r=>r.pa, rs=>({pa:rs[0].pa, per:sum(rs,'per')})).forEach(g=>perByPA[g.pa]=g.per);
+  const x_date=col(xH,'Дата'),x_pa=col(xH,'Предмет;Артикул продавца','Предмет;Артикул.Глубина','Предмет;Артикул поставщика'),
+    x_chto=col(xH,'Что'),x_grp=col(xH,'Что (группа)','Что группа'),x_sum=col(xH,'Сумма');
+  const xRows=raw.rashod.map(r=>{ const s=num(r[x_sum]);
+    const rek=(String(r[x_grp]||'').trim()==='Реклама')?s:0; const post=(String(r[x_chto]||'').trim()==='Пост расходы')?s:0;
+    return {date:pdate(r[x_date]),pa:(r[x_pa]||'').trim(),rek,post,per:s-rek-post}; });
+  const xGroup=groupBy(xRows.filter(r=>r.date),r=>keyDP(r.date,r.pa),rs=>({date:rs[0].date,paG:rs[0].pa,post:sum(rs,'post'),rek:sum(rs,'rek')}));
+  const perByPA={}; groupBy(xRows,r=>nk(r.pa),rs=>({k:nk(rs[0].pa),per:sum(rs,'per')})).forEach(g=>{if(g.k)perByPA[g.k]=g.per;});
 
-  /* ───── ШТУК → Шт (поставлено по ПА) ───── */
+  /* ШТУК → ШТ поставлено (нормализованный ключ) */
   const sH=raw.sht._headers||[];
-  const s_pa=col(sH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина'), s_qty=col(sH,'ШТ поставлено');
-  const shtByPA={};
-  raw.sht.forEach(r=>{ const pa=(r[s_pa]||'').trim(); if(pa) shtByPA[pa]=intn(r[s_qty]); });
+  const s_pa=col(sH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул продавца','Предмет;Артикул'),s_qty=col(sH,'ШТ поставлено','ШТ');
+  const shtByPA={}; raw.sht.forEach(r=>{ const k=nk(r[s_pa]); if(k)shtByPA[k]=(shtByPA[k]||0)+intn(r[s_qty]); });
 
-  /* ───── расход (перем): Перемен = Переменные / ШТ поставлено ───── */
-  const peremByPA={};
-  Object.keys(perByPA).forEach(pa=>{
-    const shtQ=shtByPA[pa]||0;
-    peremByPA[pa]= shtQ? Math.round(perByPA[pa]/shtQ) : 0;
-  });
+  /* расход(перем): Перемен = Переменные / ШТ поставлено */
+  const peremByPA={}; let matched=0,total=0; const unmatched=[];
+  Object.keys(perByPA).forEach(k=>{ total++; const shtQ=shtByPA[k]||0;
+    if(shtQ){matched++; peremByPA[k]=Math.round(perByPA[k]/shtQ);} else { peremByPA[k]=0; if(unmatched.length<5)unmatched.push(k); } });
+  diag.push({name:'ШТ-сопоставление',status:matched?'ok':'err',rows:matched,msg:`из ${total} артикулов нашли ШТ поставлено`+(unmatched.length?` · без ШТ: ${unmatched.join(', ')}`:'')});
 
-  /* ───── Лог+Хран ───── */
+  /* Лог+Хран */
   const lH=raw.log._headers||[];
-  const l_end=col(lH,'Период конец'), l_art=col(lH,'Артикул'), l_pred=col(lH,'Предмет'),
-        l_hran=col(lH,'Хранение'), l_dost=col(lH,'Доставка');
-  const logRows=raw.log.map(r=>{
-    const dim=artByPredArt[(r[l_pred]||'').trim()+'|'+(r[l_art]||'').trim()];
-    return {date:pdate(r[l_end]), paG:dim?dim.paG:'', hran:num(r[l_hran]), dost:num(r[l_dost])};
-  }).filter(r=>r.date);
-  const logGroup=groupBy(logRows, r=>key(r.date,r.paG), rs=>({
-    date:rs[0].date, paG:rs[0].paG, hran:sum(rs,'hran'), dost:sum(rs,'dost')
-  }));
+  const l_end=col(lH,'Период конец'),l_art=col(lH,'Артикул'),l_pr=col(lH,'Предмет'),l_hr=col(lH,'Хранение'),l_do=col(lH,'Доставка');
+  const logRows=raw.log.map(r=>{ const rec=artByPredArt.get(nk(r[l_pr])+'|'+nk(r[l_art]));
+    return {date:pdate(r[l_end]),paG:rec?rec.paG:('#'+(r[l_pr]||'')+(r[l_art]||'')),hran:num(r[l_hr]),dost:num(r[l_do])}; }).filter(r=>r.date);
+  const logGroup=groupBy(logRows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,hran:sum(rs,'hran'),dost:sum(rs,'dost')}));
 
-  /* ───── Acruals (отдельная таблица для мер) ───── */
+  /* Acruals */
   const acH=raw.acr._headers||[];
-  const ac_date=col(acH,'Дата'), ac_pa=col(acH,'Предмет;Артикул.Глубина','Предмет;Артикул продавца'), ac_val=col(acH,'Акруалс');
-  const acRows=raw.acr.map(r=>({date:pdate(r[ac_date]), paG:(r[ac_pa]||'').trim(), acr:intn(r[ac_val])})).filter(r=>r.date);
-  const acGroup=groupBy(acRows, r=>key(r.date,r.paG), rs=>({date:rs[0].date, paG:rs[0].paG, acr:sum(rs,'acr')}));
-  M.acruals=acGroup.map(r=>({y:r.date.getFullYear(), m:r.date.getMonth()+1, paG:r.paG, acr:r.acr}));
+  const ac_d=col(acH,'Дата'),ac_pa=col(acH,'Предмет;Артикул.Глубина','Предмет;Артикул продавца'),ac_v=col(acH,'Акруалс');
+  const acRows=raw.acr.map(r=>({date:pdate(r[ac_d]),paG:(r[ac_pa]||'').trim(),acr:intn(r[ac_v])})).filter(r=>r.date);
+  const acGroup=groupBy(acRows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,acr:sum(rs,'acr')}));
+  M.acruals=acGroup.map(r=>({y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,acr:r.acr}));
 
-  /* ───── Общий = combine{расход, «2», Лог+Хран} → group(Дата,ПА) ───── */
-  const combined=[];
-  xGroup.forEach(r=>combined.push({date:r.date,paG:r.paG, rek:r.rek, post:r.post}));
-  q2.forEach(r=>combined.push({date:r.date,paG:r.paG, zaksht:r.zaksht,vyksht:r.vyksht,zakrub:r.zakrub,vykrub:r.vykrub,nalog:r.nalog}));
-  logGroup.forEach(r=>combined.push({date:r.date,paG:r.paG, hran:r.hran, dost:r.dost}));
-  acGroup.forEach(r=>combined.push({date:r.date,paG:r.paG})); // append Acruals (даты/артикулы), меры=0
-
-  const ob=groupBy(combined.filter(r=>r.date), r=>key(r.date,r.paG), rs=>{
-    const paG=rs[0].paG, date=rs[0].date;
-    const zaksht=sum(rs,'zaksht'), vyksht=sum(rs,'vyksht'), zakrub=sum(rs,'zakrub'), vykrub=sum(rs,'vykrub'),
-          rek=sum(rs,'rek'), post=sum(rs,'post'), nalog=sum(rs,'nalog'), hran=sum(rs,'hran'), dost=sum(rs,'dost');
-    const perem=Math.round((peremByPA[paG]||0)*vyksht); // Переменные = Перемен*Выкуп,шт
-    return {date,paG, y:date.getFullYear(), m:date.getMonth()+1,
-            zaksht,vyksht,zakrub,vykrub,rek,post,nalog,hran,dost,perem};
+  /* Общий = combine{расход, «2», Лог+Хран} + append Acruals → group */
+  const comb=[];
+  xGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,rek:r.rek,post:r.post}));
+  q2.forEach(r=>comb.push({date:r.date,paG:r.paG,zaks:r.zaks,vyks:r.vyks,zakr:r.zakr,vykr:r.vykr,nalog:r.nalog}));
+  logGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,hran:r.hran,dost:r.dost}));
+  acGroup.forEach(r=>comb.push({date:r.date,paG:r.paG}));
+  const ob=groupBy(comb.filter(r=>r.date),r=>keyDP(r.date,r.paG),rs=>{
+    const paG=rs[0].paG,date=rs[0].date;
+    const vyks=sum(rs,'vyks'); const perem=Math.round((peremByPA[nk(paG)]||0)*vyks);
+    return {paG,y:date.getFullYear(),m:date.getMonth()+1,
+      zaks:sum(rs,'zaks'),vyks,zakr:sum(rs,'zakr'),vykr:sum(rs,'vykr'),
+      rek:sum(rs,'rek'),post:sum(rs,'post'),nalog:sum(rs,'nalog'),hran:sum(rs,'hran'),dost:sum(rs,'dost'),perem};
   });
   M.obshiy=ob;
 
-  /* ───── ПостР (опц.) — для Fix.CPO (не в основной матрице) ───── */
+  /* ПостР (опц.) */
   M.postR=[];
-  if(raw.post&&raw.post.length){
-    const pH=raw.post._headers; const p_sum=col(pH,'Сумма'), p_date=col(pH,'Дата');
-    M.postR=raw.post.map(r=>({date:pdate(r[p_date]), summa:intn(r[p_sum])})).filter(r=>r.date);
-  }
+  if(raw.post&&raw.post.length){ const pH=raw.post._headers; const p_s=col(pH,'Сумма'),p_d=col(pH,'Дата');
+    M.postR=raw.post.map(r=>{const d=pdate(r[p_d]);return d?{y:d.getFullYear(),m:d.getMonth()+1,summa:intn(r[p_s])}:null;}).filter(Boolean); }
 
-  /* годы */
-  M.years=[...new Set(ob.map(r=>r.y))].sort((a,b)=>b-a);
+  M.years=[...new Set(ob.map(r=>r.y))].filter(y=>y>=2018&&y<=(new Date().getFullYear()+1)).sort((a,b)=>b-a);
   M.loaded=true;
-  diag.push({name:'ИТОГО Общий', status:'ok', rows:ob.length, cols:0, msg:'строк в фактовой таблице'});
+  const totPerem=ob.reduce((s,r)=>s+r.perem,0);
+  diag.push({name:'Общий',status:'ok',rows:ob.length,msg:`Σ Переменные = ${Math.round(totPerem).toLocaleString('ru-RU')} · годы: ${M.years.join(', ')}`});
 }
+function keyDP(d,pa){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'|'+pa;}
+function sum(a,f){let s=0;for(const x of a){const v=x[f];if(typeof v==='number')s+=v;}return s;}
+function groupBy(arr,kf,af){const m=new Map();for(const x of arr){const k=kf(x);if(!m.has(k))m.set(k,[]);m.get(k).push(x);}const o=[];for(const rs of m.values())o.push(af(rs));return o;}
 
-/* helpers */
-function key(d,pa){ return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'|'+pa; }
-function sum(arr,f){ let s=0; for(const x of arr){ const v=x[f]; if(typeof v==='number') s+=v; } return s; }
-function groupBy(arr,keyFn,aggFn){
-  const map=new Map();
-  for(const x of arr){ const k=keyFn(x); if(!map.has(k)) map.set(k,[]); map.get(k).push(x); }
-  const out=[]; for(const rs of map.values()) out.push(aggFn(rs)); return out;
-}
-
-/* ═══════════ ДВИЖОК МЕР (DAX → JS) ═══════════ */
-/* Базовая агрегация Общий по (год, [месяцы], поиск) */
-function agg(y, months, q){
-  const mset=months?new Set(months):null;
-  const qq=q?q.toLowerCase():null;
-  const a={zaksht:0,vyksht:0,zakrub:0,vykrub:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0};
-  for(const r of M.obshiy){
-    if(r.y!==y) continue;
-    if(mset&&!mset.has(r.m)) continue;
-    if(qq&&!r.paG.toLowerCase().includes(qq)) continue;
-    a.zaksht+=r.zaksht; a.vyksht+=r.vyksht; a.zakrub+=r.zakrub; a.vykrub+=r.vykrub;
-    a.rek+=r.rek; a.post+=r.post; a.nalog+=r.nalog; a.hran+=r.hran; a.dost+=r.dost; a.perem+=r.perem;
-  }
-  return a;
-}
-function aggAcr(y, months, q){
-  const mset=months?new Set(months):null; const qq=q?q.toLowerCase():null; let s=0;
-  for(const r of M.acruals){
-    if(r.y!==y) continue; if(mset&&!mset.has(r.m)) continue;
-    if(qq&&!r.paG.toLowerCase().includes(qq)) continue; s+=r.acr;
-  }
-  return s;
-}
+/* ═══════════ ДВИЖОК МЕР ═══════════ */
 const DIV=(a,b)=>b?a/b:0;
-function prevMonth(y,m){ return m===1?{y:y-1,m:12}:{y,m:m-1}; }
-
-/* Пост.Р. = IF(sum(Постоянные)=0, Постоянные PM, sum(Постоянные)) */
-function postR(y,months,q){
-  const a=agg(y,months,q);
-  if(a.post!==0) return a.post;
-  if(months&&months.length===1){ const pm=prevMonth(y,months[0]); return agg(pm.y,[pm.m],q).post; }
-  return a.post;
-}
-/* набор всех мер для контекста (y, months, q) */
-function measures(y,months,q){
-  const a=agg(y,months,q);
-  const acr=aggAcr(y,months,q);
-  const pR=postR(y,months,q);
-  const pribOper = a.vykrub - a.perem - a.dost - a.hran - a.nalog;                       // Прибыль.Опер
-  const postAkr  = pR + acr;                                                             // Пост.Р (+акр)
-  const pribFactAcc = a.vykrub - a.perem - a.dost - a.hran - pR - a.rek - a.nalog - acr;  // Прибыль.Факт(acc.)
-  return {
-    zaksht:a.zaksht, vyksht:a.vyksht,
-    vkp: DIV(a.vyksht,a.zaksht),                    // Вкп%
-    zakrub:a.zakrub, vykrub:a.vykrub,
-    cena: DIV(a.vykrub,a.vyksht),                   // Ср.Чек (Цена)
-    perem:a.perem, dost:a.dost,
-    drl: DIV(a.dost,a.vykrub),                      // ДРЛ% = Дост%
-    hran:a.hran, nalog:a.nalog,
-    pribOper, pribOperP: DIV(pribOper,a.vykrub),    // Приб.Оп%
-    postAkr, rek:a.rek,
-    drr: DIV(a.rek,a.zakrub),                       // ДРР.Or%
-    pribFactAcc, pribFactAccP: DIV(pribFactAcc,a.vykrub) // Приб.Ф%(acc.)
-  };
-}
-/* Прибыль.Факт PY — по каждому месяцу берём тот же месяц прошлого года */
-function pribFactPY(y,months,q){
-  let s=0;
-  for(const m of months){
-    const mm=[m]; const py=y-1;
-    const a=agg(py,mm,q), acr=aggAcr(py,mm,q), pR=postR(py,mm,q);
-    s += a.vykrub - a.perem - a.dost - a.hran - pR - a.rek - a.nalog - acr;
-  }
-  return s;
-}
-
-/* Показатель_значение (SWITCH) — для селектора метрик */
-function pokazatel(y,months,q,name,perUnit){
-  const a=agg(y,months,q), acr=aggAcr(y,months,q), pR=postR(y,months,q);
-  const qty=a.vyksht;
+const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
+function agg(y,mset,filt){ const a={zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0};
+  for(const r of M.obshiy){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
+    a.zaks+=r.zaks;a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem; }
+  return a; }
+function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
+function postRv(y,mArr,filt){ const a=agg(y,new Set(mArr),filt); if(a.post!==0)return a.post;
+  if(mArr.length===1){const pm=prevMonth(y,mArr[0]);return agg(pm.y,new Set([pm.m]),filt).post;} return a.post; }
+function meas(y,mArr,filt){
+  const mset=new Set(mArr); const a=agg(y,mset,filt); const acr=acrSum(y,mset,filt); const pR=postRv(y,mArr,filt);
+  const pribOper=a.vykr-a.perem-a.dost-a.hran-a.nalog;
   const postAkr=pR+acr;
-  const pribOper=a.vykrub-a.perem-a.dost-a.hran-a.nalog;
-  const pribFact=a.vykrub-a.perem-a.dost-a.hran-pR-a.rek-a.nalog-acr;
-  const raw={
-    'Заказ,шт':a.zaksht,'Выкуп,шт':a.vyksht,'Вкп%':DIV(a.vyksht,a.zaksht)*100,
-    'Заказ.руб':a.zakrub,'Выкуп.руб':a.vykrub,'Ср.Чек':DIV(a.vykrub,a.vyksht),
-    'Переменные':a.perem,'Доставка':a.dost,'Хранение':a.hran,'Налог':a.nalog,'Реклама':a.rek,
-    'Пост+акр':postAkr,'Прибыль.Опер':pribOper,'Прибыль.Факт':pribFact
-  };
-  if(!perUnit) return raw[name];
-  // на штуку: объёмы/проценты как есть, деньги ÷ qty
-  if(['Заказ,шт','Выкуп,шт','Вкп%','Ср.Чек'].includes(name)) return raw[name];
-  return DIV(raw[name], qty);
+  const pribFact=a.vykr-a.perem-a.dost-a.hran-pR-a.rek-a.nalog-acr;
+  return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr:a.vykr,cena:DIV(a.vykr,a.vyks),
+    perem:a.perem,dost:a.dost,drl:DIV(a.dost,a.vykr),hran:a.hran,nalog:a.nalog,
+    pribOper,pribOperP:DIV(pribOper,a.vykr),postAkr,rek:a.rek,drr:DIV(a.rek,a.zakr),
+    pribFact,pribFactP:DIV(pribFact,a.vykr),
+    advCPO:DIV(a.rek,a.zaks),advCPS:DIV(a.rek,a.vyks),drrSa:DIV(a.rek,a.vykr),
+    logCPS:DIV(a.dost,a.vyks),stockCPS:DIV(a.hran,a.vyks),dostP:DIV(a.dost,a.vykr),hranP:DIV(a.hran,a.vykr),
+    srchek:DIV(a.zakr,a.zaks),acr};
 }
-const METRIC_LIST=['Заказ,шт','Выкуп,шт','Вкп%','Заказ.руб','Выкуп.руб','Ср.Чек','Переменные','Доставка','Хранение','Налог','Реклама','Пост+акр','Прибыль.Опер','Прибыль.Факт'];
+function predmetOf(paG){const a=M.artByPaG[paG];return a?a.pnew:'(без предмета)';}
 
 /* ═══════════ ФОРМАТ ═══════════ */
-const fi=n=>{ if(n===null||n===undefined||isNaN(n)) return '—'; const r=Math.round(n); return r.toLocaleString('ru-RU'); };
-const fp=n=>{ if(n===null||n===undefined||isNaN(n)) return '—'; return Math.round(n*100)+'%'; };
-const fp1=n=>{ if(n===null||n===undefined||isNaN(n)) return '—'; return (n*100).toFixed(1).replace('.',',')+'%'; };
+const fi=n=>(n==null||isNaN(n))?'—':Math.round(n).toLocaleString('ru-RU');
+const fp=n=>(n==null||isNaN(n))?'—':Math.round(n*100)+'%';
+const fp1=n=>(n==null||isNaN(n))?'—':(n*100).toFixed(1).replace('.',',')+'%';
+const f2=n=>(n==null||isNaN(n))?'—':n.toFixed(2).replace('.',',');
 
-/* ═══════════ РЕНДЕР ═══════════ */
-let _t;
-function debouncedRender(){ clearTimeout(_t); _t=setTimeout(render,250); }
+/* ═══════════ КОЛОНКИ ТАБЛИЦЫ ═══════════ */
+const COLS=[
+  {k:'zaks',l:'Заказ,шт',f:fi},{k:'vyks',l:'Выкуп,шт',f:fi},{k:'vkp',l:'Вкп%',f:fp},
+  {k:'zakr',l:'Заказ,руб',f:fi},{k:'vykr',l:'Выкуп,руб',f:fi,bar:'bl'},{k:'cena',l:'Ср.Чек',f:fi},
+  {k:'perem',l:'Перемен',f:fi},{k:'dost',l:'Дставка',f:fi},{k:'drl',l:'ДРЛ%',f:fp},
+  {k:'hran',l:'Хранен',f:fi},{k:'nalog',l:'Налог',f:fi},
+  {k:'pribOper',l:'Пр.Опер',f:fi},{k:'pribOperP',l:'Оп%',f:fp,hl:1},
+  {k:'postAkr',l:'Пост+акр',f:fi},{k:'rek',l:'Реклама',f:fi},{k:'drr',l:'ДРР%',f:fp1},
+  {k:'pribFact',l:'Пр.Факт(асс)',f:fi,bar:'pf'},{k:'pribFactP',l:'Ф%',f:fp,hl:1}
+];
+
+/* ═══════════ РЕНДЕР P&L ═══════════ */
+let _t; function debouncedRender(){clearTimeout(_t);_t=setTimeout(render,250);}
+function setGrp(g){grpMode=g;document.querySelectorAll('#grp button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));render();}
+function togglePY(){pyOn=!pyOn;document.getElementById('pyBtn').classList.toggle('act',pyOn);document.getElementById('pyBtn').textContent=pyOn?'✓ прошлый год':'＋ прошлый год';render();}
 
 function render(){
-  if(!M.loaded) return;
+  if(!M.loaded)return;
+  if(curTab!=='pl'){renderTab();return;}
   const y=+document.getElementById('fYear').value;
-  const mSel=document.getElementById('fMonth').value; // '' или '1'..'12'
-  const q=document.getElementById('fSearch').value.trim();
-  const visMonths = mSel? [+mSel] : [1,2,3,4,5,6,7,8,9,10,11,12];
+  const mSel=document.getElementById('fMonth').value;
+  const q=document.getElementById('fSearch').value.trim().toLowerCase();
+  const slicerMonths=mSel?[+mSel]:[1,2,3,4,5,6,7,8,9,10,11,12];
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
 
-  /* строки матрицы */
-  const rows = visMonths.map(m=>({m, name:MONTHS[m-1], v:measures(y,[m],q), py:pribFactPY(y,[m],q)}));
-  const tot = {v:measures(y,[1,2,3,4,5,6,7,8,9,10,11,12].filter(m=>!mSel||m==+mSel),q), py:pribFactPY(y, mSel?[+mSel]:[1,2,3,4,5,6,7,8,9,10,11,12], q)};
+  /* строки в зависимости от среза */
+  let rows=[];
+  if(grpMode==='month'){
+    rows=slicerMonths.map(m=>({label:MONTHS[m-1],v:meas(y,[m],searchOK),py:pyOn?meas(y-1,[m],searchOK):null}));
+  } else {
+    const dimOf = grpMode==='predmet'? (r=>predmetOf(r.paG)) : (r=>r.paG);
+    const acc={}; const mset=new Set(slicerMonths);
+    for(const r of M.obshiy){ if(r.y!==y||!mset.has(r.m)||!searchOK(r))continue; const d=dimOf(r); acc[d]=(acc[d]||0)+r.vykr; }
+    let dims=Object.keys(acc).sort((a,b)=>acc[b]-acc[a]);
+    if(grpMode==='artikul')dims=dims.slice(0,10);
+    rows=dims.map(D=>{ const filt = grpMode==='predmet'? (r=>predmetOf(r.paG)===D&&searchOK(r)) : (r=>r.paG===D&&searchOK(r));
+      return {label:D,v:meas(y,slicerMonths,filt),py:pyOn?meas(y-1,slicerMonths,filt):null}; });
+  }
+  const tot={label:'Всего',v:meas(y,slicerMonths,searchOK),py:pyOn?meas(y-1,slicerMonths,searchOK):null};
 
-  /* дата-бары: max по видимым строкам */
-  const maxVyk=Math.max(1,...rows.map(r=>Math.abs(r.v.vykrub)));
-  const maxProfit=Math.max(1,...rows.map(r=>Math.abs(r.v.pribFactAcc)));
+  /* max для баров */
+  const mx={};COLS.filter(c=>c.bar).forEach(c=>mx[c.k]=Math.max(1,...rows.map(r=>Math.abs(r.v[c.k]))));
 
-  const cols=[
-    ['Месяц'],['Заказ,шт'],['Выкуп,шт'],['Вкп%'],['Заказ,руб'],['Выкуп,руб'],['Ср.Чек'],
-    ['Перемен.'],['Дставка'],['ДРЛ%'],['Хранен.'],['Налог'],
-    ['Прибыль.Опер'],['Приб.Оп%','hl'],['Пост.Р(+акр)'],['Реклама'],['ДРР%'],
-    ['Прибыль.Факт(асс.)'],['Приб.Ф%(асс.)'],['Прибыль.Факт PY']
-  ];
-  let html='<thead><tr>'+cols.map(c=>`<th class="${c[1]||''}">${c[0]}</th>`).join('')+'</tr></thead><tbody>';
+  /* header */
+  const firstCol = grpMode==='month'?'Месяц':grpMode==='predmet'?'Предмет':'Артикул';
+  let h='<thead><tr><th>'+firstCol+'</th>';
+  COLS.forEach(c=>{ h+=`<th class="${c.hl?'hl':''}">${c.l}</th>`; if(pyOn)h+=`<th class="py">${c.l} ᴾʸ</th>`; });
+  h+='</tr></thead><tbody>';
 
-  const rowHtml=(label,v,py,isTotal)=>{
-    const barVyk = Math.abs(v.vykrub)/maxVyk*100;
-    const barPr  = Math.abs(v.pribFactAcc)/maxProfit*100;
-    const prCls  = v.pribFactAcc>0?'g':v.pribFactAcc<0?'r':'bd';
-    const prTxt  = v.pribFactAcc>0?'pos':v.pribFactAcc<0?'neg':'';
-    const empty  = (v.vyksht===0 && v.zaksht===0 && v.vykrub===0);
-    return `<tr class="${isTotal?'total':''} ${empty&&!isTotal?'empty':''}">
-      <td>${isTotal?'Всего':label}</td>
-      <td>${fi(v.zaksht)}</td>
-      <td>${fi(v.vyksht)}</td>
-      <td>${fp(v.vkp)}</td>
-      <td>${fi(v.zakrub)}</td>
-      <td class="barcell"><div class="barwrap"><div class="dbw"><div class="db bl" style="width:${barVyk}%"></div></div><span class="barval">${fi(v.vykrub)}</span></div></td>
-      <td>${fi(v.cena)}</td>
-      <td>${fi(v.perem)}</td>
-      <td>${fi(v.dost)}</td>
-      <td>${fp(v.drl)}</td>
-      <td>${fi(v.hran)}</td>
-      <td>${fi(v.nalog)}</td>
-      <td>${fi(v.pribOper)}</td>
-      <td class="hl">${fp(v.pribOperP)}</td>
-      <td>${fi(v.postAkr)}</td>
-      <td>${fi(v.rek)}</td>
-      <td>${fp1(v.drr)}</td>
-      <td class="barcell ${prTxt}"><div class="barwrap"><div class="dbw"><div class="db ${prCls}" style="width:${barPr}%"></div></div><span class="barval ${prTxt}">${fi(v.pribFactAcc)}</span></div></td>
-      <td class="${prTxt}">${fp(v.pribFactAccP)}</td>
-      <td>${py?fi(py):'—'}</td>
-    </tr>`;
+  const cell=(c,v,isPY)=>{
+    const val=v[c.k]; let inner=c.f(val);
+    let cls=(c.hl?'hl ':'')+(isPY?'py ':'');
+    if(c.k==='pribFact'&&!isPY)cls+=val>0?'pos ':val<0?'neg ':'';
+    let bar='';
+    if(c.bar&&!isPY){ const w=Math.abs(val)/mx[c.k]*100; const col=c.bar==='bl'?'bl':(val>=0?'g':'r'); bar=`<span class="bar ${col}" style="width:${w}%"></span>`; }
+    return `<td class="${cls.trim()}">${bar}<span class="v">${inner}</span></td>`;
   };
-  rows.forEach(r=>html+=rowHtml(r.name,r.v,r.py,false));
-  html+=rowHtml('Всего',tot.v,tot.py,true);
-  html+='</tbody>';
-  document.getElementById('matrix').innerHTML=html;
+  const rowHtml=(r,isTot)=>{
+    const empty=!isTot&&r.v.vyks===0&&r.v.zaks===0&&r.v.vykr===0;
+    let s=`<tr class="${isTot?'total':''} ${empty?'empty':''}"><td>${r.label}</td>`;
+    COLS.forEach(c=>{ s+=cell(c,r.v,false); if(pyOn)s+=cell(c,r.py,true); });
+    return s+'</tr>';
+  };
+  rows.forEach(r=>h+=rowHtml(r,false)); h+=rowHtml(tot,true); h+='</tbody>';
+  document.getElementById('matrix').innerHTML=h;
 
   /* KPI */
-  const yoy = tot.py? (tot.v.pribFactAcc-tot.py)/Math.abs(tot.py) : null;
+  const yoy=tot.v.pribFact!=null?DIV(tot.v.pribFact-meas(y-1,slicerMonths,searchOK).pribFact,Math.abs(meas(y-1,slicerMonths,searchOK).pribFact)):null;
+  const pv=meas(y-1,slicerMonths,searchOK).pribFact;
+  const yoy2= pv? (tot.v.pribFact-pv)/Math.abs(pv):null;
   const kpi=[
-    {l:'Выручка (Выкуп,руб)', v:fi(tot.v.vykrub), c:''},
-    {l:'Прибыль.Факт (асс.)', v:fi(tot.v.pribFactAcc), c: tot.v.pribFactAcc>=0?'g':'r',
-      d: yoy!==null?`<span class="${yoy>=0?'du':'dd'}">${yoy>=0?'▲':'▼'} ${fp1(Math.abs(yoy))}</span> к пр. году`:''},
-    {l:'Рентабельность (асс.)', v:fp(tot.v.pribFactAccP), c: tot.v.pribFactAccP>=0?'g':'r'},
-    {l:'Выкуп %', v:fp(tot.v.vkp), c:''}
+    {l:'Выручка (Выкуп,руб)',v:fi(tot.v.vykr)},
+    {l:'Прибыль.Факт (асс.)',v:fi(tot.v.pribFact),c:tot.v.pribFact>=0?'g':'r',d:yoy2!=null?`<span class="${yoy2>=0?'du':'dd'}">${yoy2>=0?'▲':'▼'} ${fp1(Math.abs(yoy2))}</span> к пр. году`:''},
+    {l:'Рентабельность (асс.)',v:fp(tot.v.pribFactP),c:tot.v.pribFactP>=0?'g':'r'},
+    {l:'Выкуп %',v:fp(tot.v.vkp)}
   ];
-  document.getElementById('kpi').innerHTML=kpi.map(k=>`
-    <div class="mc"><div class="ml">${k.l}</div><div class="mv ${k.c}">${k.v}</div>${k.d?`<div class="md">${k.d}</div>`:''}</div>`).join('');
-
-  document.getElementById('matrixSub').textContent = `год ${y}${mSel?' · '+MONTHS[+mSel-1]:''}${q?' · фильтр: '+q:''}`;
-  document.getElementById('fInfo').textContent = `Общий: ${M.obshiy.length} строк · ${M.years.length} лет`;
-
-  renderMetric();
+  document.getElementById('kpi').innerHTML=kpi.map(k=>`<div class="mc"><div class="ml">${k.l}</div><div class="mv ${k.c||''}">${k.v}</div>${k.d?`<div class="md">${k.d}</div>`:''}</div>`).join('');
+  document.getElementById('matrixTtl').textContent = grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам (топ-10)';
+  document.getElementById('matrixSub').textContent=`год ${y}${mSel?' · '+MONTHS[+mSel-1]:''}${q?' · '+q:''}`;
+  document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
 }
 
-/* ── селектор метрик (Показатель_значение) ── */
-let metricMode='total';
-function setMetricMode(m){ metricMode=m; document.getElementById('mgTot').classList.toggle('on',m==='total'); document.getElementById('mgUnit').classList.toggle('on',m==='unit'); renderMetric(); }
-function renderMetric(){
-  if(!M.loaded) return;
+/* ═══════════ ВКЛАДКИ ═══════════ */
+function tab(p){ curTab=p; document.querySelectorAll('#tabs .tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
+  ['pl','profit','adv','log','fix','check'].forEach(x=>document.getElementById('page-'+x).style.display=x===p?'block':'none');
+  document.getElementById('grpWrap').style.display=p==='pl'?'flex':'none';
+  document.getElementById('pyWrap').style.display=p==='pl'?'flex':'none';
+  if(M.loaded){ if(p==='pl')render(); else renderTab(); }
+}
+function monthTable(cols,y,q){ /* cols: [{l,fn(m|null)}] fn returns formatted */
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+  let h='<thead><tr><th>Месяц</th>'+cols.map(c=>`<th>${c.l}</th>`).join('')+'</tr></thead><tbody>';
+  for(let m=1;m<=12;m++){ h+=`<tr><td>${MONTHS[m-1]}</td>`+cols.map(c=>`<td>${c.fn([m],searchOK)}</td>`).join('')+'</tr>'; }
+  h+=`<tr class="total"><td>Всего</td>`+cols.map(c=>`<td>${c.fn([1,2,3,4,5,6,7,8,9,10,11,12],searchOK)}</td>`).join('')+'</tr></tbody>';
+  return h;
+}
+function renderTab(){
   const y=+document.getElementById('fYear').value;
-  const q=document.getElementById('fSearch').value.trim();
-  const name=document.getElementById('mMetric').value;
-  const per=metricMode==='unit';
-  const isPct = name==='Вкп%';
-  const fmt = isPct? (v=>Math.round(v)+'%') : fi;
-  let html='<thead><tr><th>Показатель</th>'+MONTHS.map(m=>`<th>${m.slice(0,3)}</th>`).join('')+'<th class="hl">Год</th></tr></thead><tbody><tr>';
-  html+=`<td>${name}${per?' · шт':''}</td>`;
-  let yearVal;
-  for(let m=1;m<=12;m++){ html+=`<td>${fmt(pokazatel(y,[m],q,name,per))}</td>`; }
-  yearVal = pokazatel(y,[1,2,3,4,5,6,7,8,9,10,11,12],q,name,per);
-  html+=`<td class="hl">${fmt(yearVal)}</td></tr></tbody>`;
-  document.getElementById('metricTbl').innerHTML=html;
+  const q=document.getElementById('fSearch').value.trim().toLowerCase();
+  const el=document.getElementById('page-'+curTab);
+  if(curTab==='adv'){
+    const cols=[
+      {l:'Реклама',fn:(m,f)=>fi(meas(y,m,f).rek)},
+      {l:'ДРР.Or%',fn:(m,f)=>fp1(meas(y,m,f).drr)},
+      {l:'ДРР.Sa%',fn:(m,f)=>fp1(meas(y,m,f).drrSa)},
+      {l:'Adv.CPO',fn:(m,f)=>fi(meas(y,m,f).advCPO)},
+      {l:'Adv.CPS',fn:(m,f)=>fi(meas(y,m,f).advCPS)},
+    ];
+    el.innerHTML=`<div class="sec"><div class="sh"><div class="st">Реклама по месяцам · ${y}</div><div class="sm2">ДРР.Order — от заказов · ДРР.Sale — от выкупов · CPO/CPS — стоимость на заказ/продажу</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
+  } else if(curTab==='log'){
+    const cols=[
+      {l:'Доставка',fn:(m,f)=>fi(meas(y,m,f).dost)},
+      {l:'Хранение',fn:(m,f)=>fi(meas(y,m,f).hran)},
+      {l:'Дост%',fn:(m,f)=>fp1(meas(y,m,f).dostP)},
+      {l:'Хран%',fn:(m,f)=>fp1(meas(y,m,f).hranP)},
+      {l:'Log.CPS',fn:(m,f)=>fi(meas(y,m,f).logCPS)},
+      {l:'Stock.CPS',fn:(m,f)=>f2(meas(y,m,f).stockCPS)},
+    ];
+    el.innerHTML=`<div class="sec"><div class="sh"><div class="st">Логистика по месяцам · ${y}</div><div class="sm2">CPS — стоимость на 1 выкуп</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
+  } else if(curTab==='fix'){
+    const hasPost=M.postR.length>0;
+    const postSum=(mArr)=>{const ms=new Set(mArr);return M.postR.filter(r=>r.y===y&&ms.has(r.m)).reduce((s,r)=>s+r.summa,0);};
+    const cols=[
+      {l:'Постоянные',fn:(m,f)=>fi(meas(y,m,f).postAkr-meas(y,m,f).acr)},
+      {l:'Акруалс',fn:(m,f)=>fi(meas(y,m,f).acr)},
+      {l:'Пост.Р(+акр)',fn:(m,f)=>fi(meas(y,m,f).postAkr)},
+      {l:'Fix.CPO',fn:(m,f)=>hasPost?fi(DIV(postSum(m),meas(y,m,f).zaks)):'—'},
+    ];
+    el.innerHTML=`<div class="sec"><div class="sh"><div class="st">Постоянные расходы по месяцам · ${y}</div><div class="sm2">${hasPost?'Fix.CPO из «ПОСТ затраты архив»':'Fix.CPO — добавьте лист «ПОСТ затраты архив» в настройках'}</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
+  } else if(curTab==='check'){
+    const cols=[
+      {l:'Заказ,шт',fn:(m,f)=>fi(meas(y,m,f).zaks)},
+      {l:'Ср.Чек Заказа',fn:(m,f)=>fi(meas(y,m,f).srchek)},
+      {l:'Цена (Выкуп)',fn:(m,f)=>fi(meas(y,m,f).cena)},
+      {l:'Ср.Чек PY',fn:(m,f)=>fi(meas(y-1,m,f).srchek)},
+    ];
+    el.innerHTML=`<div class="sec"><div class="sh"><div class="st">Средний чек по месяцам · ${y}</div><div class="sm2">Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт · Цена = Выкуп,руб ÷ Выкуп,шт</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
+  } else if(curTab==='profit'){
+    renderProfit(el,y,q);
+  }
+}
+function renderProfit(el,y,q){
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+  const all=[1,2,3,4,5,6,7,8,9,10,11,12];
+  const curMonth=new Date().getFullYear()===y?new Date().getMonth()+1:12;
+  const ytd=all.filter(m=>m<=curMonth);
+  /* по годам */
+  const byYear=M.years.slice().sort((a,b)=>a-b).map(yy=>({y:yy,v:meas(yy,all,searchOK).pribFact}));
+  const maxY=Math.max(1,...byYear.map(x=>Math.abs(x.v)));
+  const yearBars=byYear.map(x=>`<div class="barrow"><div class="lbl">${x.y}</div><div class="track"><div class="fill ${x.v<0?'neg':''}" style="width:${Math.abs(x.v)/maxY*100}%"></div></div><div class="num">${fi(x.v)}</div></div>`).join('');
+  /* YTD янв→тек.месяц по годам */
+  const byYtd=M.years.slice().sort((a,b)=>a-b).map(yy=>({y:yy,v:meas(yy,ytd,searchOK).pribFact}));
+  const maxYt=Math.max(1,...byYtd.map(x=>Math.abs(x.v)));
+  const ytdBars=byYtd.map(x=>`<div class="barrow"><div class="lbl">${x.y} (янв–${MONTHS[curMonth-1].slice(0,3).toLowerCase()})</div><div class="track"><div class="fill ${x.v<0?'neg':''}" style="width:${Math.abs(x.v)/maxYt*100}%"></div></div><div class="num">${fi(x.v)}</div></div>`).join('');
+  /* помесячно текущий vs PY */
+  const cur=all.map(m=>meas(y,[m],searchOK).pribFact);
+  const prv=all.map(m=>meas(y-1,[m],searchOK).pribFact);
+  const maxM=Math.max(1,...cur.map(Math.abs),...prv.map(Math.abs));
+  const mom=all.map((m,i)=>{ const hc=Math.max(0,cur[i]/maxM*90),hp=Math.max(0,prv[i]/maxM*90);
+    return `<div class="momcol"><div class="mombars"><div class="mb cur" style="height:${hc}px" title="${fi(cur[i])}"></div><div class="mb prv" style="height:${hp}px" title="${fi(prv[i])}"></div></div><div>${MONTHS[m-1].slice(0,3)}</div></div>`;}).join('');
+  el.innerHTML=`
+    <div class="chartgrid">
+      <div class="chartbox"><div class="chartttl">Прибыль.Факт по годам</div>${yearBars}</div>
+      <div class="chartbox"><div class="chartttl">Прибыль YTD (янв → тек. месяц)</div>${ytdBars}</div>
+    </div>
+    <div class="chartbox"><div class="chartttl">Помесячно: ${y} (тёмный) vs ${y-1} (светлый)</div><div class="mom">${mom}</div></div>`;
 }
 
-/* ═══════════ UI / загрузка ═══════════ */
-function fillSettings(){
-  document.getElementById('u_report').value=CFG.report;
-  document.getElementById('u_rashod').value=CFG.rashod;
-  document.getElementById('u_art').value=CFG.art;
-  document.getElementById('u_log').value=CFG.log;
-  document.getElementById('u_sht').value=CFG.sht;
-  document.getElementById('u_acr').value=CFG.acr;
-  document.getElementById('u_post').value=CFG.post;
-  document.getElementById('u_ekon').value=CFG.ekon;
-}
-function openSetup(){ fillSettings(); document.getElementById('setup').classList.add('show'); }
-function readSettings(){
-  CFG={
-    report:document.getElementById('u_report').value.trim(),
-    rashod:document.getElementById('u_rashod').value.trim(),
-    art:document.getElementById('u_art').value.trim(),
-    log:document.getElementById('u_log').value.trim(),
-    sht:document.getElementById('u_sht').value.trim(),
-    acr:document.getElementById('u_acr').value.trim(),
-    post:document.getElementById('u_post').value.trim(),
-    ekon:document.getElementById('u_ekon').value.trim()
-  };
-  try{ localStorage.setItem(LS_KEY,JSON.stringify(CFG)); }catch(e){}
-}
-async function saveAndLoad(){ readSettings(); await load(true); }
-
+/* ═══════════ UI / ЗАГРУЗКА ═══════════ */
+const CFG_KEYS=['worker','pass','report','rashod','art','log','sht','acr','post','ekon'];
+function fillSettings(){CFG_KEYS.forEach(k=>{const e=document.getElementById('u_'+k);if(e)e.value=CFG[k]||'';});}
+function openSetup(){fillSettings();document.getElementById('setup').classList.add('show');}
+function readSettings(){CFG={};CFG_KEYS.forEach(k=>{const e=document.getElementById('u_'+k);CFG[k]=e?e.value.trim():'';});try{localStorage.setItem(LS_KEY,JSON.stringify(CFG));}catch(e){}}
+async function saveAndLoad(){readSettings();await load(true);}
 async function load(fromSetup){
-  const msg=document.getElementById('smsg');
-  if(fromSetup){ msg.className='smsg'; msg.textContent='Загрузка…'; }
+  const msg=document.getElementById('smsg'); if(fromSetup){msg.className='smsg';msg.textContent='Загрузка…';}
   document.getElementById('reloadBtn').disabled=true;
-  try{
-    await buildModel();
-    // заполнить фильтры
-    const yl=document.getElementById('fYear'); yl.innerHTML=M.years.map(y=>`<option>${y}</option>`).join('');
-    const ml=document.getElementById('mMetric'); ml.innerHTML=METRIC_LIST.map(m=>`<option>${m}</option>`).join('');
-    ml.value='Выкуп.руб';
+  try{ await buildModel();
+    document.getElementById('fYear').innerHTML=M.years.map(y=>`<option>${y}</option>`).join('');
     document.getElementById('placeholder').style.display='none';
     document.getElementById('fbar').style.display='flex';
     document.getElementById('kpi').style.display='grid';
     document.getElementById('matrixSec').style.display='block';
-    document.getElementById('metricSec').style.display='block';
-    render();
-    renderDiag();
-    if(fromSetup){ msg.className='smsg ok'; msg.textContent='Готово ✓'; setTimeout(()=>document.getElementById('setup').classList.remove('show'),600); }
-  }catch(e){
-    renderDiag();
-    if(fromSetup){ msg.className='smsg err'; msg.textContent='Ошибка: '+e.message+'\n(см. диагностику)'; }
-    else { document.getElementById('placeholder').innerHTML='Ошибка загрузки: '+e.message+'<div><button class="loadbtn" onclick="openSetup()">Настройки</button></div>'; }
+    render(); renderDiag();
+    if(fromSetup){msg.className='smsg ok';msg.textContent='Готово ✓';setTimeout(()=>document.getElementById('setup').classList.remove('show'),600);}
+  }catch(e){ renderDiag();
+    if(fromSetup){msg.className='smsg err';msg.textContent='Ошибка: '+e.message+'\n(см. диагностику)';}
+    else{document.getElementById('placeholder').innerHTML='Ошибка: '+e.message+'<div><button class="loadbtn" onclick="openSetup()">Настройки</button></div>';}
   }
   document.getElementById('reloadBtn').disabled=false;
 }
-function reload(){ load(false); }
-
-function toggleDiag(){ document.getElementById('diag').classList.toggle('show'); renderDiag(); }
-function renderDiag(){
-  const d=document.getElementById('diag'); if(!M.diag) return;
+function reload(){load(false);}
+function toggleDiag(){document.getElementById('diag').classList.toggle('show');renderDiag();}
+function renderDiag(){ const d=document.getElementById('diag'); if(!M.diag)return;
   let h='<b>Диагностика загрузки</b><table>';
-  M.diag.forEach(x=>{
-    const dot=x.status==='ok'?'ok':x.status==='warn'?'warn':'err';
-    h+=`<tr><td><span class="dot ${dot}"></span>${x.name}</td><td>${x.rows} строк</td><td>${x.cols?x.cols+' колонок':''}</td><td>${x.msg||''}</td></tr>`;
-  });
-  h+='</table><div style="margin-top:8px;color:var(--ink3)">Если колонки не распознаны — проверьте, что заголовки в таблице совпадают с моделью (напр. «Заказано, шт.», «К перечислению за товар, руб.»).</div>';
+  M.diag.forEach(x=>{const dot=x.status==='ok'?'ok':x.status==='warn'?'warn':'err';
+    h+=`<tr><td><span class="dot ${dot}"></span>${x.name}</td><td>${x.rows} строк</td><td>${x.msg||''}</td></tr>`;});
+  h+='</table><div style="margin-top:8px;color:var(--ink3)">Если «ШТ-сопоставление» = 0 — не совпадают ключи артикулов между листами «расход» и «ШТУК»; пришлите пример значений, подстрою.</div>';
   d.innerHTML=h;
 }
-
-/* часы */
-setInterval(()=>{ const n=new Date(); document.getElementById('clk').textContent=n.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); },1000);
-
-/* старт */
-(function init(){
-  try{ const s=localStorage.getItem(LS_KEY); if(s) CFG={...DEFAULTS,...JSON.parse(s)}; }catch(e){}
-  fillSettings();
-  // автозагрузка, если есть обязательные ссылки
-  if(CFG.report&&CFG.rashod){ load(false); }
-  else { document.getElementById('setup').classList.add('show'); }
-})();
+setInterval(()=>{const n=new Date();document.getElementById('clk').textContent=n.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});},1000);
+(function init(){ try{const s=localStorage.getItem(LS_KEY);if(s)CFG={...DEFAULTS,...JSON.parse(s)};}catch(e){}
+  fillSettings(); if(CFG.worker||CFG.report)load(false); else document.getElementById('setup').classList.add('show'); })();
 </script>
 </body>
 </html>
