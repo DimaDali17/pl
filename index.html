@@ -60,6 +60,8 @@ body{font-family:'Comfortaa',sans-serif;background:var(--bg);color:var(--ink);fo
 .sm2{font-size:11px;color:var(--ink3)}
 .sw{background:var(--card);border:1px solid var(--border);border-radius:11px;overflow-x:auto}
 table{width:100%;border-collapse:collapse}
+#matrix{width:auto;min-width:auto}
+#matrix thead th,#matrix tbody td{padding-left:12px;padding-right:12px}
 thead th{text-align:right;padding:5px 7px;font-size:8.5px;font-weight:700;color:var(--ink3);background:var(--bg3);text-transform:uppercase;letter-spacing:.02em;border-bottom:1px solid var(--border);font-family:inherit;white-space:nowrap;position:sticky;top:0;z-index:5;line-height:1.15}
 thead th:first-child{text-align:left}
 thead th.hl{background:var(--hl2)!important;color:var(--amber)!important}
@@ -85,11 +87,17 @@ td span.v{position:relative;z-index:1}
 .barrow .fill{position:absolute;top:0;bottom:0;left:0;border-radius:4px;background:var(--green)}
 .barrow .fill.neg{background:var(--red)}
 .barrow .num{width:90px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
-.mom{display:flex;gap:3px;align-items:flex-end;height:130px;padding-top:18px}
-.momcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9px}
-.mombars{display:flex;gap:2px;align-items:flex-end;height:90px}
-.mombars .mb{width:11px;border-radius:2px 2px 0 0}
+.mom{display:flex;gap:4px;align-items:flex-end;height:96px}
+.momcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px}
+.momval{font-size:8.5px;color:var(--ink3);font-weight:700;height:11px}
+.mombars{display:flex;gap:3px;align-items:flex-end;height:58px}
+.mombars .mb{width:15px;border-radius:2px 2px 0 0}
 .mombars .cur{background:var(--green)}.mombars .prv{background:#B7D9C4}
+/* svg chart */
+.svgbox{width:100%}
+.leg{display:flex;gap:14px;font-size:10px;color:var(--ink2);margin-bottom:8px;font-weight:700}
+.leg span{display:inline-flex;align-items:center;gap:5px}
+.leg i{width:12px;height:12px;border-radius:3px;display:inline-block}
 /* diag */
 .diag{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:8px;font-size:11px;color:var(--ink2);display:none}
 .diag.show{display:block}
@@ -318,13 +326,21 @@ async function buildModel(){
   /* ШТУК → ШТ поставлено (нормализованный ключ) */
   const sH=raw.sht._headers||[];
   const s_pa=col(sH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул продавца','Предмет;Артикул'),s_qty=col(sH,'ШТ поставлено','ШТ');
-  const shtByPA={}; raw.sht.forEach(r=>{ const k=nk(r[s_pa]); if(k)shtByPA[k]=(shtByPA[k]||0)+intn(r[s_qty]); });
+  const shtByPA={}; const shtRaw={}; raw.sht.forEach(r=>{ const k=nk(r[s_pa]); if(k){shtByPA[k]=(shtByPA[k]||0)+intn(r[s_qty]); if(!shtRaw[k])shtRaw[k]=(r[s_pa]||'').trim();} });
 
   /* расход(перем): Перемен = Переменные / ШТ поставлено */
   const peremByPA={}; let matched=0,total=0; const unmatched=[];
+  const perRaw={}; xRows.forEach(r=>{ const k=nk(r.pa); if(k&&!perRaw[k])perRaw[k]=(r.pa||'').trim(); });
   Object.keys(perByPA).forEach(k=>{ total++; const shtQ=shtByPA[k]||0;
-    if(shtQ){matched++; peremByPA[k]=Math.round(perByPA[k]/shtQ);} else { peremByPA[k]=0; if(unmatched.length<5)unmatched.push(k); } });
-  diag.push({name:'ШТ-сопоставление',status:matched?'ok':'err',rows:matched,msg:`из ${total} артикулов нашли ШТ поставлено`+(unmatched.length?` · без ШТ: ${unmatched.join(', ')}`:'')});
+    if(shtQ){matched++; peremByPA[k]=Math.round(perByPA[k]/shtQ);} else { peremByPA[k]=0; if(unmatched.length<3)unmatched.push(perRaw[k]||k); } });
+  const shtKeys=Object.keys(shtByPA), perKeys=Object.keys(perByPA);
+  const totSht=shtKeys.reduce((s,k)=>s+shtByPA[k],0), totPer=perKeys.reduce((s,k)=>s+perByPA[k],0);
+  const smp=(arr,map)=>arr.slice(0,3).map(k=>map[k]||k).join('  ┃  ')||'—';
+  diag.push({name:'ШТ-сопоставление',status:matched?(matched<total*0.5?'warn':'ok'):'err',rows:matched,
+    msg:`${matched} из ${total} артикулов · ΣШТ=${Math.round(totSht).toLocaleString('ru-RU')} · Σ переменных(до÷шт)=${Math.round(totPer).toLocaleString('ru-RU')}`});
+  diag.push({name:'  ключи «расход(перем)»',status:'warn',rows:perKeys.length,msg:smp(perKeys,perRaw)});
+  diag.push({name:'  ключи «ШТУК»',status:'warn',rows:shtKeys.length,msg:smp(shtKeys,shtRaw)});
+  if(unmatched.length)diag.push({name:'  без ШТ (примеры)',status:'warn',rows:0,msg:unmatched.join('  ┃  ')});
 
   /* Лог+Хран */
   const lH=raw.log._headers||[];
@@ -496,6 +512,21 @@ function monthTable(cols,y,q){ /* cols: [{l,fn(m|null)}] fn returns formatted */
   h+=`<tr class="total"><td>Всего</td>`+cols.map(c=>`<td>${c.fn([1,2,3,4,5,6,7,8,9,10,11,12],searchOK)}</td>`).join('')+'</tr></tbody>';
   return h;
 }
+/* дуал-ось: столбцы (левая шкала) + линия (правая шкала) */
+function svgBarLine(labels,bars,line){
+  const W=1100,H=250,pL=8,pR=8,pT=26,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
+  const maxB=Math.max(1,...bars),maxL=Math.max(1,...line);
+  const bx=i=>pL+bw*i+bw*0.22,bwid=bw*0.56,by=v=>pT+ih-(v/maxB*ih);
+  const lx=i=>pL+bw*i+bw*0.5,ly=v=>pT+ih-(v/maxL*ih);
+  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:230px;font-family:Comfortaa">`;
+  bars.forEach((v,i)=>{const h=Math.max(0,v/maxB*ih);s+=`<rect x="${bx(i).toFixed(1)}" y="${by(v).toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="var(--blue)" opacity="0.5"/>`;});
+  const pts=line.map((v,i)=>`${lx(i).toFixed(1)},${ly(v).toFixed(1)}`).join(' ');
+  s+=`<polyline points="${pts}" fill="none" stroke="var(--amber)" stroke-width="2.5"/>`;
+  line.forEach((v,i)=>{s+=`<circle cx="${lx(i).toFixed(1)}" cy="${ly(v).toFixed(1)}" r="3" fill="var(--amber)"/>`;
+    if(v)s+=`<text x="${lx(i).toFixed(1)}" y="${(ly(v)-7).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--ink2)" font-weight="700">${Math.round(v)}</text>`;});
+  labels.forEach((L,i)=>{s+=`<text x="${lx(i).toFixed(1)}" y="${H-7}" text-anchor="middle" font-size="10" fill="var(--ink3)">${L}</text>`;});
+  return s+'</svg>';
+}
 function renderTab(){
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
@@ -530,13 +561,22 @@ function renderTab(){
     ];
     el.innerHTML=`<div class="sec"><div class="sh"><div class="st">Постоянные расходы по месяцам · ${y}</div><div class="sm2">${hasPost?'Fix.CPO из «ПОСТ затраты архив»':'Fix.CPO — добавьте лист «ПОСТ затраты архив» в настройках'}</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
   } else if(curTab==='check'){
+    const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+    const all=[1,2,3,4,5,6,7,8,9,10,11,12];
+    const bars=all.map(m=>meas(y,[m],searchOK).zaks);
+    const line=all.map(m=>meas(y,[m],searchOK).srchek);
+    const chart=svgBarLine(MONTHS.map(x=>x.slice(0,3)),bars,line);
     const cols=[
       {l:'Заказ,шт',fn:(m,f)=>fi(meas(y,m,f).zaks)},
       {l:'Ср.Чек Заказа',fn:(m,f)=>fi(meas(y,m,f).srchek)},
       {l:'Цена (Выкуп)',fn:(m,f)=>fi(meas(y,m,f).cena)},
       {l:'Ср.Чек PY',fn:(m,f)=>fi(meas(y-1,m,f).srchek)},
     ];
-    el.innerHTML=`<div class="sec"><div class="sh"><div class="st">Средний чек по месяцам · ${y}</div><div class="sm2">Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт · Цена = Выкуп,руб ÷ Выкуп,шт</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
+    el.innerHTML=`
+      <div class="chartbox" style="margin-bottom:14px"><div class="chartttl">Заказ,шт и Ср.Чек по месяцам · ${y}</div>
+        <div class="leg"><span><i style="background:var(--blue);opacity:.55"></i>Заказ,шт</span><span><i style="background:var(--amber)"></i>Ср.Чек Заказа</span></div>
+        <div class="svgbox">${chart}</div></div>
+      <div class="sec"><div class="sh"><div class="st">Средний чек по месяцам · ${y}</div><div class="sm2">Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт · Цена = Выкуп,руб ÷ Выкуп,шт</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
   } else if(curTab==='profit'){
     renderProfit(el,y,q);
   }
@@ -558,8 +598,9 @@ function renderProfit(el,y,q){
   const cur=all.map(m=>meas(y,[m],searchOK).pribFact);
   const prv=all.map(m=>meas(y-1,[m],searchOK).pribFact);
   const maxM=Math.max(1,...cur.map(Math.abs),...prv.map(Math.abs));
-  const mom=all.map((m,i)=>{ const hc=Math.max(0,cur[i]/maxM*90),hp=Math.max(0,prv[i]/maxM*90);
-    return `<div class="momcol"><div class="mombars"><div class="mb cur" style="height:${hc}px" title="${fi(cur[i])}"></div><div class="mb prv" style="height:${hp}px" title="${fi(prv[i])}"></div></div><div>${MONTHS[m-1].slice(0,3)}</div></div>`;}).join('');
+  const mln=v=>v?(v/1e6).toFixed(1).replace('.',','):'';
+  const mom=all.map((m,i)=>{ const hc=Math.max(1,cur[i]/maxM*56),hp=Math.max(1,prv[i]/maxM*56);
+    return `<div class="momcol"><div class="momval">${mln(cur[i])}</div><div class="mombars"><div class="mb cur" style="height:${hc}px" title="${fi(cur[i])}"></div><div class="mb prv" style="height:${hp}px" title="${fi(prv[i])}"></div></div><div>${MONTHS[m-1].slice(0,3)}</div></div>`;}).join('');
   el.innerHTML=`
     <div class="chartgrid">
       <div class="chartbox"><div class="chartttl">Прибыль.Факт по годам</div>${yearBars}</div>
@@ -597,7 +638,7 @@ function renderDiag(){ const d=document.getElementById('diag'); if(!M.diag)retur
   let h='<b>Диагностика загрузки</b><table>';
   M.diag.forEach(x=>{const dot=x.status==='ok'?'ok':x.status==='warn'?'warn':'err';
     h+=`<tr><td><span class="dot ${dot}"></span>${x.name}</td><td>${x.rows} строк</td><td>${x.msg||''}</td></tr>`;});
-  h+='</table><div style="margin-top:8px;color:var(--ink3)">Если «ШТ-сопоставление» = 0 — не совпадают ключи артикулов между листами «расход» и «ШТУК»; пришлите пример значений, подстрою.</div>';
+  h+='</table><div style="margin-top:8px;color:var(--ink3)">Если «ШТ-сопоставление» низкое — сравните строки «ключи расход(перем)» и «ключи ШТУК»: они должны совпадать. Пришлите этот блок — подстрою соединение.</div>';
   d.innerHTML=h;
 }
 setInterval(()=>{const n=new Date();document.getElementById('clk').textContent=n.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});},1000);
