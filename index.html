@@ -421,10 +421,23 @@ function agg(y,mset,filt){ const a={zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nal
 function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
 function postRv(y,mArr,filt){ const a=agg(y,new Set(mArr),filt); if(a.post!==0)return a.post;
   if(mArr.length===1){const pm=prevMonth(y,mArr[0]);return agg(pm.y,new Set([pm.m]),filt).post;} return a.post; }
+/* правило рекламы применимо к месяцу: с апреля 2026 И только к ЗАВЕРШЁННОМУ месяцу */
+function ruleApplies(y,m){
+  const now=new Date(),nowY=now.getFullYear(),nowM=now.getMonth()+1;
+  const fromApr=(y>2026)||(y===2026&&m>=4);
+  const completed=(y<nowY)||(y===nowY&&m<nowM);
+  return fromApr&&completed;
+}
 function meas(y,mArr,filt){
+  const isAgg=(filt==null)||filt.agg===true;                 // правило рекламы — только на агрегате (весь месяц), не внутри предмета/артикула
   const mset=new Set(mArr); const a=agg(y,mset,filt); const acr=acrSum(y,mset,filt); const pR=postRv(y,mArr,filt);
-  const rekEst = adFix && a.rek<30000;        // реклама записана не полностью → оценка
-  const rek = rekEst ? 300000 : a.rek;
+  let rek=a.rek, rekEst=false;
+  if(adFix&&isAgg){
+    rek=0;
+    for(const m of mArr){ let r=agg(y,new Set([m]),filt).rek;
+      if(ruleApplies(y,m)&&r<30000){ r=300000; if(mArr.length===1)rekEst=true; }
+      rek+=r; }
+  }
   const pribOper=a.vykr-a.perem-a.dost-a.hran-a.nalog;
   const postAkr=pR+acr;
   const pribFact=a.vykr-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr;
@@ -479,7 +492,7 @@ function render(){
   const mSel=document.getElementById('fMonth').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
   const slicerMonths=mSel?[+mSel]:[1,2,3,4,5,6,7,8,9,10,11,12];
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
 
   /* строки в зависимости от среза */
   let rows=[];
@@ -557,7 +570,7 @@ function tab(p){ curTab=p; document.querySelectorAll('#tabs .tab').forEach(t=>t.
   if(M.loaded){ if(p==='pl')render(); else renderTab(); }
 }
 function monthTable(cols,y,q){
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
   let h='<thead><tr><th>Месяц</th>'+cols.map(c=>`<th title="${c.t||c.l}">${c.l}</th>`).join('')+'</tr></thead><tbody>';
   for(let m=1;m<=12;m++){ h+=`<tr><td>${MONTHS[m-1]}</td>`+cols.map(c=>`<td>${c.fn([m],searchOK)}</td>`).join('')+'</tr>'; }
   h+=`<tr class="total"><td>Всего</td>`+cols.map(c=>`<td>${c.fn([1,2,3,4,5,6,7,8,9,10,11,12],searchOK)}</td>`).join('')+'</tr></tbody>';
@@ -565,7 +578,7 @@ function monthTable(cols,y,q){
 }
 /* разрез по предметам / артикулам (артикулы <100 заказов → «Прочее») */
 function breakdownTable(cols,y,q,dim){
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
   const all=[1,2,3,4,5,6,7,8,9,10,11,12];
   const acc={},ord={};
   for(const r of M.obshiy){ if(r.y!==y||!searchOK(r))continue; const d=dim==='predmet'?predmetOf(r.paG):r.paG; acc[d]=(acc[d]||0)+r.vykr; ord[d]=(ord[d]||0)+r.zaks; }
@@ -614,7 +627,7 @@ function renderTab(){
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
   const el=document.getElementById('page-'+curTab);
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
   const all=[1,2,3,4,5,6,7,8,9,10,11,12];
   if(curTab==='adv'){
     const rekM=all.map(m=>meas(y,[m],searchOK).rek), drrM=all.map(m=>meas(y,[m],searchOK).drr);
@@ -674,7 +687,7 @@ function renderTab(){
   }
 }
 function renderProfit(el,y,q){
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
   const all=[1,2,3,4,5,6,7,8,9,10,11,12];
   const nowY=new Date().getFullYear(),curMonth=(y===nowY)?Math.max(1,new Date().getMonth()):12; // последний полный месяц
   const ytd=all.filter(m=>m<=curMonth);
@@ -726,6 +739,7 @@ async function load(fromSetup){
   document.getElementById('reloadBtn').disabled=true;
   try{ await buildModel();
     document.getElementById('fYear').innerHTML=M.years.map(y=>`<option>${y}</option>`).join('');
+    document.getElementById('fMonth').innerHTML='<option value="">Все</option>'+MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
     /* автодополнение поиска артикулов из справочника/продаж */
     const arts=[...new Set(M.obshiy.filter(r=>r.vyks>0||r.zaks>0).map(r=>r.paG))].filter(Boolean).sort();
     document.getElementById('artList').innerHTML=arts.slice(0,1000).map(a=>`<option value="${String(a).replace(/"/g,'&quot;')}">`).join('');
