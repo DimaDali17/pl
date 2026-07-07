@@ -243,7 +243,7 @@ function col(headers,...names){
   return null;
 }
 /* нормализация ключа артикула для соединений */
-const nk=s=>String(s==null?'':s).toLowerCase().replace(/[\s\u00a0]+/g,'').replace(/["']/g,'').trim();
+const nk=s=>String(s==null?'':s).toLowerCase().replace(/[^0-9a-zа-яё]/gi,'');
 
 /* ═══════════ ЗАГРУЗКА ═══════════ */
 const SHEETS=['report','rashod','art','log','sht','acr','post','ekon'];
@@ -308,7 +308,7 @@ async function buildModel(){
   const TAX=new Date(2026,1,1); const q2=[];
   raw.report.forEach(r=>{
     const d=pdate(r[r_den]); if(!d)return; const post=(r[r_post]||'').trim();
-    const rec=artByPost.get(nk(post)); const paG=rec?rec.paP:('#'+post);
+    const rec=artByPost.get(nk(post)); const paG=rec?rec.paG:('#'+post);
     const perech=num(r[r_per]); const nalog=Math.round(perech*(d>=TAX?0.11:0.07));
     q2.push({date:d,paG,zaks:intn(r[r_zaks]),vyks:intn(r[r_vyks]),zakr:num(r[r_zakr]),vykr:perech,nalog});
   });
@@ -333,6 +333,11 @@ async function buildModel(){
   const perRaw={}; xRows.forEach(r=>{ const k=nk(r.pa); if(k&&!perRaw[k])perRaw[k]=(r.pa||'').trim(); });
   Object.keys(perByPA).forEach(k=>{ total++; const shtQ=shtByPA[k]||0;
     if(shtQ){matched++; peremByPA[k]=Math.round(perByPA[k]/shtQ);} else { peremByPA[k]=0; if(unmatched.length<3)unmatched.push(perRaw[k]||k); } });
+  /* делаем перемен-на-штуку находимым по ОБЕИМ формам ключа (глубина / поставщик),
+     сопоставляя через справочник артикулов — не важно, какой формой ключа приходят продажи */
+  artDim.forEach(a=>{ const kP=nk(a.paP),kG=nk(a.paG);
+    const v=(peremByPA[kP]!==undefined&&peremByPA[kP]!==0)?peremByPA[kP]:((peremByPA[kG]!==undefined&&peremByPA[kG]!==0)?peremByPA[kG]:undefined);
+    if(v!==undefined){ peremByPA[kP]=v; peremByPA[kG]=v; } });
   const shtKeys=Object.keys(shtByPA), perKeys=Object.keys(perByPA);
   const totSht=shtKeys.reduce((s,k)=>s+shtByPA[k],0), totPer=perKeys.reduce((s,k)=>s+perByPA[k],0);
   const smp=(arr,map)=>arr.slice(0,3).map(k=>map[k]||k).join('  ┃  ')||'—';
@@ -346,7 +351,7 @@ async function buildModel(){
   const lH=raw.log._headers||[];
   const l_end=col(lH,'Период конец'),l_art=col(lH,'Артикул'),l_pr=col(lH,'Предмет'),l_hr=col(lH,'Хранение'),l_do=col(lH,'Доставка');
   const logRows=raw.log.map(r=>{ const rec=artByPredArt.get(nk(r[l_pr])+'|'+nk(r[l_art]));
-    return {date:pdate(r[l_end]),paG:rec?rec.paP:('#'+(r[l_pr]||'')+(r[l_art]||'')),hran:num(r[l_hr]),dost:num(r[l_do])}; }).filter(r=>r.date);
+    return {date:pdate(r[l_end]),paG:rec?rec.paG:('#'+(r[l_pr]||'')+(r[l_art]||'')),hran:num(r[l_hr]),dost:num(r[l_do])}; }).filter(r=>r.date);
   const logGroup=groupBy(logRows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,hran:sum(rs,'hran'),dost:sum(rs,'dost')}));
 
   /* Acruals */
@@ -380,6 +385,12 @@ async function buildModel(){
   M.loaded=true;
   const totPerem=ob.reduce((s,r)=>s+r.perem,0);
   diag.push({name:'Общий',status:'ok',rows:ob.length,msg:`Σ Переменные = ${Math.round(totPerem).toLocaleString('ru-RU')} · годы: ${M.years.join(', ')}`});
+  /* покрытие: сколько выкупов получили перемен на штуку */
+  let vAll=0,vHit=0; for(const r of ob){ vAll+=r.vyks; if(r.perem!==0)vHit+=r.vyks; }
+  const salesKeys=[...new Set(ob.filter(r=>r.vyks>0).map(r=>r.paG))];
+  diag.push({name:'Переменные покрытие',status:vHit/Math.max(1,vAll)>0.5?'ok':'err',rows:0,
+    msg:`перемен есть у ${Math.round(vHit/Math.max(1,vAll)*100)}% выкупленных штук`});
+  diag.push({name:'  ключи продаж (Общий)',status:'warn',rows:salesKeys.length,msg:salesKeys.slice(0,3).join('  ┃  ')||'—'});
 }
 function keyDP(d,pa){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'|'+pa;}
 function sum(a,f){let s=0;for(const x of a){const v=x[f];if(typeof v==='number')s+=v;}return s;}
@@ -512,26 +523,38 @@ function monthTable(cols,y,q){ /* cols: [{l,fn(m|null)}] fn returns formatted */
   h+=`<tr class="total"><td>Всего</td>`+cols.map(c=>`<td>${c.fn([1,2,3,4,5,6,7,8,9,10,11,12],searchOK)}</td>`).join('')+'</tr></tbody>';
   return h;
 }
-/* дуал-ось: столбцы (левая шкала) + линия (правая шкала) */
-function svgBarLine(labels,bars,line){
-  const W=1100,H=250,pL=8,pR=8,pT=26,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
-  const maxB=Math.max(1,...bars),maxL=Math.max(1,...line);
-  const bx=i=>pL+bw*i+bw*0.22,bwid=bw*0.56,by=v=>pT+ih-(v/maxB*ih);
+/* пропорциональный график: столбцы (левая шкала) + линия (правая шкала) */
+function chartBL(labels,bars,line,o){
+  o=o||{}; const W=920,H=225,pL=6,pR=6,pT=22,pB=22,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
+  const maxB=Math.max(1,...bars.map(v=>Math.abs(v)||0));
+  const lv=line.filter(v=>isFinite(v)&&v>0); const maxL=Math.max(1,...lv);
+  const bx=i=>pL+bw*i+bw*0.28,bwid=bw*0.44,by=v=>pT+ih-(Math.max(0,v)/maxB*ih);
   const lx=i=>pL+bw*i+bw*0.5,ly=v=>pT+ih-(v/maxL*ih);
-  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:230px;font-family:Comfortaa">`;
-  bars.forEach((v,i)=>{const h=Math.max(0,v/maxB*ih);s+=`<rect x="${bx(i).toFixed(1)}" y="${by(v).toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="var(--blue)" opacity="0.5"/>`;});
-  const pts=line.map((v,i)=>`${lx(i).toFixed(1)},${ly(v).toFixed(1)}`).join(' ');
-  s+=`<polyline points="${pts}" fill="none" stroke="var(--amber)" stroke-width="2.5"/>`;
-  line.forEach((v,i)=>{s+=`<circle cx="${lx(i).toFixed(1)}" cy="${ly(v).toFixed(1)}" r="3" fill="var(--amber)"/>`;
-    if(v)s+=`<text x="${lx(i).toFixed(1)}" y="${(ly(v)-7).toFixed(1)}" text-anchor="middle" font-size="11" fill="var(--ink2)" font-weight="700">${Math.round(v)}</text>`;});
-  labels.forEach((L,i)=>{s+=`<text x="${lx(i).toFixed(1)}" y="${H-7}" text-anchor="middle" font-size="10" fill="var(--ink3)">${L}</text>`;});
+  const bc=o.barColor||'var(--blue)',lc=o.lineColor||'var(--amber)',lf=o.lineFmt||(v=>Math.round(v));
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
+  for(let g=1;g<=3;g++){const yy=(pT+ih-ih*g/4).toFixed(1);s+=`<line x1="${pL}" y1="${yy}" x2="${W-pR}" y2="${yy}" stroke="var(--border)" stroke-width="1"/>`;}
+  bars.forEach((v,i)=>{const h=Math.max(0,v)/maxB*ih;s+=`<rect x="${bx(i).toFixed(1)}" y="${by(v).toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${bc}" opacity="0.5"/>`;});
+  const seg=[];line.forEach((v,i)=>{if(isFinite(v)&&v>0)seg.push(`${lx(i).toFixed(1)},${ly(v).toFixed(1)}`);});
+  if(seg.length>1)s+=`<polyline points="${seg.join(' ')}" fill="none" stroke="${lc}" stroke-width="2.5"/>`;
+  line.forEach((v,i)=>{if(isFinite(v)&&v>0){s+=`<circle cx="${lx(i).toFixed(1)}" cy="${ly(v).toFixed(1)}" r="3" fill="${lc}"/>`;
+    s+=`<text x="${lx(i).toFixed(1)}" y="${(ly(v)-7).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink2)" font-weight="700">${lf(v)}</text>`;}});
+  labels.forEach((L,i)=>{s+=`<text x="${lx(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9.5" fill="var(--ink3)">${L}</text>`;});
   return s+'</svg>';
 }
+const svgBarLine=(l,b,ln)=>chartBL(l,b,ln);
+function chartCard(title,legend,svg){return `<div class="chartbox" style="margin-bottom:14px"><div class="chartttl">${title}</div><div class="leg">${legend}</div><div class="svgbox">${svg}</div></div>`;}
+const legItem=(c,txt,op)=>`<span><i style="background:${c};${op?'opacity:'+op:''}"></i>${txt}</span>`;
 function renderTab(){
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
   const el=document.getElementById('page-'+curTab);
   if(curTab==='adv'){
+    const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+    const mns=MONTHS.map(x=>x.slice(0,3)), all=[1,2,3,4,5,6,7,8,9,10,11,12];
+    const rekM=all.map(m=>meas(y,[m],searchOK).rek), drrM=all.map(m=>meas(y,[m],searchOK).drr);
+    const chart=chartCard(`Реклама и ДРР.Or% по месяцам · ${y}`,
+      legItem('var(--amber)','Реклама',.7)+legItem('var(--blue)','ДРР.Or%'),
+      chartBL(mns,rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%'}));
     const cols=[
       {l:'Реклама',fn:(m,f)=>fi(meas(y,m,f).rek)},
       {l:'ДРР.Or%',fn:(m,f)=>fp1(meas(y,m,f).drr)},
@@ -539,8 +562,14 @@ function renderTab(){
       {l:'Adv.CPO',fn:(m,f)=>fi(meas(y,m,f).advCPO)},
       {l:'Adv.CPS',fn:(m,f)=>fi(meas(y,m,f).advCPS)},
     ];
-    el.innerHTML=`<div class="sec"><div class="sh"><div class="st">Реклама по месяцам · ${y}</div><div class="sm2">ДРР.Order — от заказов · ДРР.Sale — от выкупов · CPO/CPS — стоимость на заказ/продажу</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
+    el.innerHTML=chart+`<div class="sec"><div class="sh"><div class="st">Реклама по месяцам · ${y}</div><div class="sm2">ДРР.Order — от заказов · ДРР.Sale — от выкупов · CPO/CPS — стоимость на заказ/продажу</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
   } else if(curTab==='log'){
+    const searchOK=r=>!q||r.paG.toLowerCase().includes(q);
+    const mns=MONTHS.map(x=>x.slice(0,3)), all=[1,2,3,4,5,6,7,8,9,10,11,12];
+    const dostM=all.map(m=>meas(y,[m],searchOK).dost), cpsM=all.map(m=>meas(y,[m],searchOK).logCPS);
+    const chart=chartCard(`Доставка и Log.CPS по месяцам · ${y}`,
+      legItem('var(--blue)','Доставка',.6)+legItem('var(--amber)','Log.CPS (на выкуп)'),
+      chartBL(mns,dostM,cpsM,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v)}));
     const cols=[
       {l:'Доставка',fn:(m,f)=>fi(meas(y,m,f).dost)},
       {l:'Хранение',fn:(m,f)=>fi(meas(y,m,f).hran)},
@@ -549,7 +578,7 @@ function renderTab(){
       {l:'Log.CPS',fn:(m,f)=>fi(meas(y,m,f).logCPS)},
       {l:'Stock.CPS',fn:(m,f)=>f2(meas(y,m,f).stockCPS)},
     ];
-    el.innerHTML=`<div class="sec"><div class="sh"><div class="st">Логистика по месяцам · ${y}</div><div class="sm2">CPS — стоимость на 1 выкуп</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
+    el.innerHTML=chart+`<div class="sec"><div class="sh"><div class="st">Логистика по месяцам · ${y}</div><div class="sm2">CPS — стоимость на 1 выкуп</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
   } else if(curTab==='fix'){
     const hasPost=M.postR.length>0;
     const postSum=(mArr)=>{const ms=new Set(mArr);return M.postR.filter(r=>r.y===y&&ms.has(r.m)).reduce((s,r)=>s+r.summa,0);};
@@ -565,18 +594,16 @@ function renderTab(){
     const all=[1,2,3,4,5,6,7,8,9,10,11,12];
     const bars=all.map(m=>meas(y,[m],searchOK).zaks);
     const line=all.map(m=>meas(y,[m],searchOK).srchek);
-    const chart=svgBarLine(MONTHS.map(x=>x.slice(0,3)),bars,line);
+    const chart=chartCard(`Заказ,шт и Ср.Чек по месяцам · ${y}`,
+      legItem('var(--blue)','Заказ,шт',.5)+legItem('var(--amber)','Ср.Чек Заказа'),
+      chartBL(MONTHS.map(x=>x.slice(0,3)),bars,line,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v)}));
     const cols=[
       {l:'Заказ,шт',fn:(m,f)=>fi(meas(y,m,f).zaks)},
       {l:'Ср.Чек Заказа',fn:(m,f)=>fi(meas(y,m,f).srchek)},
       {l:'Цена (Выкуп)',fn:(m,f)=>fi(meas(y,m,f).cena)},
       {l:'Ср.Чек PY',fn:(m,f)=>fi(meas(y-1,m,f).srchek)},
     ];
-    el.innerHTML=`
-      <div class="chartbox" style="margin-bottom:14px"><div class="chartttl">Заказ,шт и Ср.Чек по месяцам · ${y}</div>
-        <div class="leg"><span><i style="background:var(--blue);opacity:.55"></i>Заказ,шт</span><span><i style="background:var(--amber)"></i>Ср.Чек Заказа</span></div>
-        <div class="svgbox">${chart}</div></div>
-      <div class="sec"><div class="sh"><div class="st">Средний чек по месяцам · ${y}</div><div class="sm2">Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт · Цена = Выкуп,руб ÷ Выкуп,шт</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
+    el.innerHTML=chart+`<div class="sec"><div class="sh"><div class="st">Средний чек по месяцам · ${y}</div><div class="sm2">Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт · Цена = Выкуп,руб ÷ Выкуп,шт</div></div><div class="sw"><table>${monthTable(cols,y,q)}</table></div></div>`;
   } else if(curTab==='profit'){
     renderProfit(el,y,q);
   }
