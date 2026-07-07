@@ -286,16 +286,30 @@ async function buildModel(){
 
   /* Артикул dim */
   const aH=raw.art._headers||[];
-  const c_pred=col(aH,'Предмет'),c_post=col(aH,'Артикул поставщика'),c_glub=col(aH,'Артикул.Глубина','Артикул Глубина'),c_new=col(aH,'Предмет_Новый','Предмет;Новый');
+  const c_pred=col(aH,'Предмет'),c_post=col(aH,'Артикул поставщика'),c_glub=col(aH,'Артикул.Глубина','Артикул Глубина'),c_new=col(aH,'Предмет_Новый','Предмет;Новый'),c_scep=col(aH,'Сцепка','Сцепка2');
   const artDim=[]; const artByPost=new Map(); const artByPredArt=new Map();
+  let predEmpty=0;
   raw.art.forEach(r=>{
-    const predmet=(r[c_pred]||'').trim(),post=(r[c_post]||'').trim(),glub=(r[c_glub]||'').trim(),pnew=c_new?(r[c_new]||'').trim():'';
+    let predmet=(r[c_pred]||'').trim(); const post=(r[c_post]||'').trim(),glub=(r[c_glub]||'').trim(),pnew=c_new?(r[c_new]||'').trim():'';
+    const scep=c_scep?(r[c_scep]||'').trim():'';
+    /* если «Предмет» пуст — восстановим из «Сцепка» (Сцепка = Предмет+Артикул поставщика) */
+    if(!predmet&&scep&&post&&scep.length>post.length&&nk(scep).endsWith(nk(post))){
+      // отрезаем хвост-артикул по длине совпадения с нормализованным post
+      let cut=scep.length; const npost=nk(post); let acc='';
+      for(let i=scep.length-1;i>=0;i--){ acc=nk(scep[i])+acc; cut=i; if(acc===npost)break; }
+      predmet=scep.slice(0,cut).trim();
+    }
+    if(!predmet&&scep&&glub&&nk(scep).endsWith(nk(glub))){ predmet=scep.slice(0,scep.length-glub.length).trim(); }
+    if(!predmet)predEmpty++;
     const paG=predmet+glub, paP=predmet+post; if(paP===''||paP===';')return;
-    const rec={predmet,post,glub,pnew:pnew||predmet,paG,paP}; artDim.push(rec);
+    const rec={predmet,post,glub,pnew:pnew||predmet,paG,paP,scep}; artDim.push(rec);
     if(post)artByPost.set(nk(post),rec);
     artByPredArt.set(nk(predmet)+'|'+nk(post),rec);
   });
   M.artByPaG={}; artDim.forEach(a=>{ M.artByPaG[a.paP]=a; M.artByPaG[a.paG]=a; });
+  const smp0=artDim[0]||{};
+  diag.push({name:'Артикул (справочник)',status:predEmpty>artDim.length*0.5?'err':'ok',rows:artDim.length,
+    msg:`Предмет-колонка: ${c_pred||'—'} · пустых предметов: ${predEmpty} · пример: «${smp0.predmet||''}» + «${smp0.glub||''}» → ключ «${smp0.paG||''}»`});
 
   /* «2» */
   const rH=raw.report._headers;
