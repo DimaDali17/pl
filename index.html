@@ -342,21 +342,21 @@ async function buildModel(){
   const s_pa=col(sH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул продавца','Предмет;Артикул'),s_qty=col(sH,'ШТ поставлено','ШТ');
   const shtByPA={}; const shtRaw={}; raw.sht.forEach(r=>{ const k=nk(r[s_pa]); if(k){shtByPA[k]=(shtByPA[k]||0)+intn(r[s_qty]); if(!shtRaw[k])shtRaw[k]=(r[s_pa]||'').trim();} });
 
-  /* ── Переменные (логика №3): Расход-ШТ из «экон» × Выкуп,шт ── */
-  const eH=raw.ekon&&raw.ekon._headers||[];
-  const e_pa=col(eH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул','Сцепка'),
-        e_rs=col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ','Расход_ШТ');
-  const perUnit={}; const ekonRaw={};
-  (raw.ekon||[]).forEach(r=>{ const k=nk(r[e_pa]); if(k){ perUnit[k]=num(r[e_rs]); if(!ekonRaw[k])ekonRaw[k]=(r[e_pa]||'').trim(); } });
+  /* ── Переменные (логика №2, по Power Query): Перемен = Σпеременных_артикула ÷ ШТ поставлено ── */
+  const perUnit={}; let matched=0; const perKeys0=Object.keys(perByPA); const unmatched=[];
+  const perRaw={}; xRows.forEach(r=>{ const k=nk(r.pa); if(k&&!perRaw[k])perRaw[k]=(r.pa||'').trim(); });
+  perKeys0.forEach(k=>{ const q=shtByPA[k]||0;
+    if(q){ matched++; perUnit[k]=Math.round(perByPA[k]/q); } else if(unmatched.length<3){ unmatched.push(perRaw[k]||k); } });
   /* находимо по обеим формам ключа (глубина / поставщик) через справочник */
   artDim.forEach(a=>{ const kP=nk(a.paP),kG=nk(a.paG);
     const v=(perUnit[kP]!==undefined)?perUnit[kP]:(perUnit[kG]!==undefined?perUnit[kG]:undefined);
     if(v!==undefined){ perUnit[kP]=v; perUnit[kG]=v; } });
-  const ekonKeys=Object.keys(perUnit);
-  const smp=(arr,map)=>arr.slice(0,3).map(k=>map[k]||k).join('  ┃  ')||'—';
-  diag.push({name:'экон Расход-ШТ',status:(e_rs&&ekonKeys.length)?'ok':'err',rows:ekonKeys.length,
-    msg:e_rs?`колонка «${e_rs}» · ${ekonKeys.length} артикулов`:'колонка «Расход-ШТ» не найдена — проверьте лист экон'});
-  diag.push({name:'  ключи «экон»',status:'warn',rows:ekonKeys.length,msg:smp(ekonKeys,ekonRaw)});
+  const smp=(arr,map)=>arr.slice(0,3).map(k=>(map&&map[k])||k).join('  ┃  ')||'—';
+  diag.push({name:'Перемен (расход÷ШТУК)',status:matched?(matched<perKeys0.length*0.5?'warn':'ok'):'err',rows:matched,
+    msg:`${matched} из ${perKeys0.length} артикулов сошлись с ШТУК`});
+  diag.push({name:'  ключи «расход(перем)»',status:'warn',rows:perKeys0.length,msg:smp(perKeys0,perRaw)});
+  diag.push({name:'  ключи «ШТУК»',status:'warn',rows:Object.keys(shtByPA).length,msg:smp(Object.keys(shtByPA),shtRaw)});
+  if(unmatched.length)diag.push({name:'  расход без ШТУК (примеры)',status:'warn',rows:0,msg:unmatched.join('  ┃  ')});
 
   /* Лог+Хран */
   const lH=raw.log._headers||[];
