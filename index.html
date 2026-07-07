@@ -60,8 +60,8 @@ body{font-family:'Comfortaa',sans-serif;background:var(--bg);color:var(--ink);fo
 .sm2{font-size:11px;color:var(--ink3)}
 .sw{background:var(--card);border:1px solid var(--border);border-radius:11px;overflow-x:auto}
 table{width:100%;border-collapse:collapse}
-#matrix{width:auto;min-width:auto}
-#matrix thead th,#matrix tbody td{padding-left:12px;padding-right:12px}
+#page-adv table,#page-log table,#page-fix table,#page-check table{width:auto;min-width:auto}
+#page-adv table th,#page-adv table td,#page-log table th,#page-log table td,#page-fix table th,#page-fix table td,#page-check table th,#page-check table td{padding-left:14px;padding-right:14px}
 thead th{text-align:right;padding:5px 7px;font-size:8.5px;font-weight:700;color:var(--ink3);background:var(--bg3);text-transform:uppercase;letter-spacing:.02em;border-bottom:1px solid var(--border);font-family:inherit;white-space:nowrap;position:sticky;top:0;z-index:5;line-height:1.15}
 thead th:first-child{text-align:left}
 thead th.hl{background:var(--hl2)!important;color:var(--amber)!important}
@@ -295,7 +295,7 @@ async function buildModel(){
     if(post)artByPost.set(nk(post),rec);
     artByPredArt.set(nk(predmet)+'|'+nk(post),rec);
   });
-  M.artByPaG={}; artDim.forEach(a=>{ M.artByPaG[a.paG]=a; });
+  M.artByPaG={}; artDim.forEach(a=>{ M.artByPaG[a.paP]=a; M.artByPaG[a.paG]=a; });
 
   /* «2» */
   const rH=raw.report._headers;
@@ -308,7 +308,7 @@ async function buildModel(){
   const TAX=new Date(2026,1,1); const q2=[];
   raw.report.forEach(r=>{
     const d=pdate(r[r_den]); if(!d)return; const post=(r[r_post]||'').trim();
-    const rec=artByPost.get(nk(post)); const paG=rec?rec.paG:('#'+post);
+    const rec=artByPost.get(nk(post)); const paG=rec?rec.paP:('#'+post);
     const perech=num(r[r_per]); const nalog=Math.round(perech*(d>=TAX?0.11:0.07));
     q2.push({date:d,paG,zaks:intn(r[r_zaks]),vyks:intn(r[r_vyks]),zakr:num(r[r_zakr]),vykr:perech,nalog});
   });
@@ -346,7 +346,7 @@ async function buildModel(){
   const lH=raw.log._headers||[];
   const l_end=col(lH,'Период конец'),l_art=col(lH,'Артикул'),l_pr=col(lH,'Предмет'),l_hr=col(lH,'Хранение'),l_do=col(lH,'Доставка');
   const logRows=raw.log.map(r=>{ const rec=artByPredArt.get(nk(r[l_pr])+'|'+nk(r[l_art]));
-    return {date:pdate(r[l_end]),paG:rec?rec.paG:('#'+(r[l_pr]||'')+(r[l_art]||'')),hran:num(r[l_hr]),dost:num(r[l_do])}; }).filter(r=>r.date);
+    return {date:pdate(r[l_end]),paG:rec?rec.paP:('#'+(r[l_pr]||'')+(r[l_art]||'')),hran:num(r[l_hr]),dost:num(r[l_do])}; }).filter(r=>r.date);
   const logGroup=groupBy(logRows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,hran:sum(rs,'hran'),dost:sum(rs,'dost')}));
 
   /* Acruals */
