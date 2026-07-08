@@ -60,8 +60,9 @@ body{font-family:'Comfortaa',sans-serif;background:var(--bg);color:var(--ink);fo
 .sm2{font-size:11px;color:var(--ink3)}
 .sw{background:var(--card);border:1px solid var(--border);border-radius:11px;overflow-x:auto}
 table{width:100%;border-collapse:collapse}
-#page-adv table,#page-log table,#page-fix table,#page-check table{width:auto;min-width:auto}
-#page-adv table th,#page-adv table td,#page-log table th,#page-log table td,#page-fix table th,#page-fix table td,#page-check table th,#page-check table td{padding-left:14px;padding-right:14px}
+#page-adv table,#page-log table,#page-fix table,#page-check table{width:100%;table-layout:fixed}
+#page-adv td,#page-adv th,#page-log td,#page-log th,#page-fix td,#page-fix th,#page-check td,#page-check th{padding:4px 6px;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#page-adv th:first-child,#page-adv td:first-child,#page-log th:first-child,#page-log td:first-child,#page-fix th:first-child,#page-fix td:first-child,#page-check th:first-child,#page-check td:first-child{width:19%}
 thead th{text-align:right;padding:5px 7px;font-size:8.5px;font-weight:700;color:var(--ink3);background:var(--bg3);text-transform:uppercase;letter-spacing:.02em;border-bottom:1px solid var(--border);font-family:inherit;white-space:nowrap;position:sticky;top:0;z-index:5;line-height:1.15}
 thead th:first-child{text-align:left}
 thead th.hl{background:var(--hl2)!important;color:var(--amber)!important}
@@ -110,6 +111,14 @@ td span.v{position:relative;z-index:1}
 .lm{padding:60px;text-align:center;color:var(--ink3)}
 .loadbtn{margin-top:12px;padding:8px 18px;background:var(--ink);color:var(--bg3);border:0;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit}
 .scaffold{background:var(--card);border:1px dashed var(--border2);border-radius:11px;padding:24px;color:var(--ink3);font-size:12px;line-height:1.6}
+.inscol{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1100px;align-items:start}
+.insb{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px}
+.insb.full{grid-column:1/-1}
+.insh{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px}
+.insl{font-size:12.5px;line-height:1.65;color:var(--ink2);padding:4px 0;border-top:1px solid var(--border)}
+.insl:first-of-type{border-top:0}
+.insl b{color:var(--ink)}
+@media(max-width:820px){.inscol{grid-template-columns:1fr}}
 @media(max-width:900px){.mg{grid-template-columns:repeat(2,1fr)}.chartgrid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -589,6 +598,7 @@ function breakdownTable(cols,y,q,dim,months){
     rows=big.map(D=>({label:D,filt:r=>r.paG===D&&searchOK(r)}));
     if(small.length){const sset=new Set(small);rows.push({label:`Прочее (${small.length} арт. <100)`,filt:r=>sset.has(r.paG)&&searchOK(r)});}
   } else { rows=dims.map(D=>({label:D,filt:r=>predmetOf(r.paG)===D&&searchOK(r)})); }
+  cols=cols.filter(c=>!c.noBreak);                    // Fix.CPO и подобное — только помесячно, не в разрезах
   const head=dim==='predmet'?'Предмет':'Артикул';
   let h=`<thead><tr><th>${head}</th>`+cols.map(c=>`<th title="${c.t||c.l}">${c.l}</th>`).join('')+'</tr></thead><tbody>';
   rows.forEach(r=>{ h+=`<tr><td title="${r.label}">${r.label}</td>`+cols.map(c=>`<td>${c.fn(mArr,r.filt)}</td>`).join('')+'</tr>'; });
@@ -644,13 +654,15 @@ function renderTab(){
     const chart=chartCard(`Реклама и ДРР.Or% по месяцам · ${y}`,
       legItem('var(--amber)','Реклама, ₽',.7)+legItem('var(--blue)','ДРР.Or%'),
       chartBL(mns3,rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf}));
-    const cols=base.concat([
+    const cols=[
+      {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
+      {l:'Выкуп,руб',t:'Выручка (К перечислению за товар)',fn:(m,f)=>fi(meas(y,m,f).vykr)},
       {l:'Реклама',t:'Расходы на рекламу (лист расход, группа «Реклама»). Для завершённых месяцев c апр.2026: если <30 000 ₽ → 300 000 ₽ (оценка)',fn:(m,f)=>fi(meas(y,m,f).rek)},
-      {l:'ДРР.Or%',t:'Реклама ÷ Заказ,руб',fn:(m,f)=>fp1(meas(y,m,f).drr)},
-      {l:'ДРР.Sa%',t:'Реклама ÷ Выкуп,руб',fn:(m,f)=>fp1(meas(y,m,f).drrSa)},
+      {l:'ДРР.Sa%',t:'Реклама ÷ Выкуп,руб (ДРР от продаж)',fn:(m,f)=>fp1(meas(y,m,f).drrSa)},
+      {l:'ДРР.Or%',t:'Реклама ÷ Заказ,руб (ДРР от заказов)',fn:(m,f)=>fp1(meas(y,m,f).drr)},
       {l:'Adv.CPO',t:'Реклама ÷ Заказ,шт (стоимость на заказ)',fn:(m,f)=>fi(meas(y,m,f).advCPO)},
       {l:'Adv.CPS',t:'Реклама ÷ Выкуп,шт (стоимость на продажу)',fn:(m,f)=>fi(meas(y,m,f).advCPS)},
-    ]);
+    ];
     tabTables(el,chart,'Реклама','ДРР.Order — от заказов · ДРР.Sale — от выкупов',cols,y,q,sM);
   } else if(curTab==='log'){
     const dostM=all.map(m=>meas(y,[m],searchOK).dost), cpsM=all.map(m=>meas(y,[m],searchOK).logCPS);
@@ -676,7 +688,7 @@ function renderTab(){
       {l:'Постоянные',t:'Постоянные расходы (лист расход, «Пост расходы») с откатом на пр. месяц если 0',fn:(m,f)=>fi(meas(y,m,f).postAkr-meas(y,m,f).acr)},
       {l:'Акруалс',t:'Акруалс (отдельный лист Acruals)',fn:(m,f)=>fi(meas(y,m,f).acr)},
       {l:'Пост.Р(+акр)',t:'Постоянные + Акруалс',fn:(m,f)=>fi(meas(y,m,f).postAkr)},
-      {l:'Fix.CPO',t:'ПОСТ затраты архив ÷ Заказ,шт',fn:(m,f)=>hasPost?fi(DIV(postSum(m),meas(y,m,f).zaks)):'—'},
+      {l:'Fix.CPO',noBreak:1,t:'Постоянные всего ÷ Заказ,шт всего — осмысленно только на уровне «Всего», не по артикулам',fn:(m,f)=>{const M0=meas(y,m,f);const ps=hasPost?postSum(m):(M0.postAkr-M0.acr);return fi(DIV(ps,M0.zaks));}},
     ]);
     tabTables(el,chart,'Постоянные расходы',hasPost?'Fix.CPO из «ПОСТ затраты архив»':'Fix.CPO — добавьте лист «ПОСТ затраты архив»',cols,y,q,sM);
   } else if(curTab==='check'){
@@ -734,17 +746,17 @@ function chartGrouped(labels,s1,s2,fmt){
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
   s+=`<line x1="${pL}" y1="${zy.toFixed(1)}" x2="${W-pR}" y2="${zy.toFixed(1)}" stroke="var(--border2)" stroke-width="1"/>`;
   labels.forEach((L,i)=>{ const cx=pL+bw*i+bw/2;
-    [[s1[i],'var(--green)',-1],[s2[i],'#B7D9C4',1]].forEach(([v,col,side])=>{
-      const val=v||0,h=hOf(val),x=side<0?cx-bwid-gap/2:cx+gap/2,yy=val>=0?zy-h:zy;
+    [[s1[i],'var(--green)','var(--red)',-1],[s2[i],'#B7D9C4','#E3AFAF',1]].forEach(([v,colPos,colNeg,side])=>{
+      const val=v||0,h=hOf(val),x=side<0?cx-bwid-gap/2:cx+gap/2,yy=val>=0?zy-h:zy,col=val<0?colNeg:colPos;
       s+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${col}"/>`;
-      if(val)s+=`<text x="${(x+bwid/2).toFixed(1)}" y="${(val>=0?yy-3:zy+h+9).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--ink3)" font-weight="700">${fmt(val)}</text>`;
+      if(val)s+=`<text x="${(x+bwid/2).toFixed(1)}" y="${(val>=0?yy-3:zy+h+9).toFixed(1)}" text-anchor="middle" font-size="8" fill="${val<0?'var(--red)':'var(--ink3)'}" font-weight="700">${fmt(val)}</text>`;
     });
     s+=`<text x="${cx.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--ink3)">${L}</text>`;
   });
   return s+'</svg>';
 }
 
-/* ═══════════ ИНСАЙТЫ ═══════════ */
+/* ═══════════ ИНСАЙТЫ (шаблонный пересказ цифр, без ИИ) ═══════════ */
 function renderInsights(el,y,q){
   const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
   const now=new Date(),nowY=now.getFullYear(),nowM=now.getMonth()+1;
@@ -758,28 +770,47 @@ function renderInsights(el,y,q){
   const YT=meas(y,ytdM,searchOK), YTp=meas(y-1,ytdM,searchOK);
   const pc=(c,p)=>{ if(p==null||!isFinite(p)||p===0)return null; return (c-p)/Math.abs(p); };
   const ar=(c,p)=>{ const d=pc(c,p); if(d==null)return '<span style="color:var(--ink3)">н/д</span>'; return `<span class="${d>=0?'pos':'neg'}">${d>=0?'▲ +':'▼ '}${(d*100).toFixed(0)}%</span>`; };
-  const pp=(c,p)=>{ if(c==null||p==null)return ''; const d=(c-p)*100; return `<span class="${d>=0?'pos':'neg'}">${d>=0?'+':''}${d.toFixed(1)} п.п.</span>`; };
-  /* топ предметов по прибыли за месяц */
+  const pp=(c,p)=>{ const d=(c-p)*100; return `<span class="${d>=0?'pos':'neg'}">${d>=0?'+':''}${d.toFixed(1)} п.п.</span>`; };
   const preds=[...new Set(M.obshiy.filter(r=>r.y===y&&r.m===lastM&&searchOK(r)).map(r=>predmetOf(r.paG)))];
   const pr=preds.map(P0=>({p:P0,v:meas(y,[lastM],r=>predmetOf(r.paG)===P0&&searchOK(r)).pribFact})).sort((a,b)=>b.v-a.v);
   const top=pr.slice(0,3), bot=pr.filter(x=>x.v<0).slice(-3).reverse();
-
+  const fixcpo=DIV(A.postAkr-A.acr,A.zaks);
   const card=(l,v,d)=>`<div class="mc"><div class="ml">${l}</div><div class="mv" style="font-size:20px">${v}</div>${d?`<div class="md">${d}</div>`:''}</div>`;
+  const block=(ttl,lines,full)=>`<div class="insb${full?' full':''}"><div class="insh">${ttl}</div>${lines.map(t=>`<div class="insl">${t}</div>`).join('')}</div>`;
+
   el.innerHTML=`
-    <div class="sh"><div class="st">Инсайты · ${mName} ${y} (последний завершённый месяц)</div><div class="sm2">сравнение м/м и г/г, нарастающий итог</div></div>
-    <div class="mg" style="margin-bottom:14px">
-      ${card('Выручка (Выкуп,руб)',fi(A.vykr),`к ${MONTHS[pm.mm-1].toLowerCase()}: ${ar(A.vykr,P.vykr)} · к ${mName.toLowerCase()} ${y-1}: ${ar(A.vykr,Yq.vykr)}`)}
+    <div class="sh"><div class="st">Инсайты · ${mName} ${y}</div><div class="sm2">последний завершённый месяц · пересказ таблиц и графиков (генерируется автоматически)</div></div>
+    <div class="mg" style="margin-bottom:16px">
+      ${card('Выручка (Выкуп,руб)',fi(A.vykr),`м/м ${ar(A.vykr,P.vykr)} · г/г ${ar(A.vykr,Yq.vykr)}`)}
       ${card('Прибыль.Факт (асс.)',fi(A.pribFact),`м/м ${ar(A.pribFact,P.pribFact)} · г/г ${ar(A.pribFact,Yq.pribFact)}`)}
-      ${card('Рентабельность',fp(A.pribFactP),`м/м ${pp(A.pribFactP,P.pribFactP)} · г/г ${pp(A.pribFactP,Yq.pribFactP)}`)}
-      ${card('Выкупаемость',fp(A.vkp),`м/м ${pp(A.vkp,P.vkp)} · г/г ${pp(A.vkp,Yq.vkp)}`)}
+      ${card('Рентабельность',fp(A.pribFactP),`м/м ${pp(A.pribFactP,P.pribFactP)}`)}
+      ${card('Выкупаемость',fp(A.vkp),`м/м ${pp(A.vkp,P.vkp)}`)}
     </div>
-    <div class="chartbox" style="line-height:1.7">
-      <p>За <b>${mName} ${y}</b> выручка составила <b>${fi(A.vykr)} ₽</b>, чистая прибыль (с акруалс) — <b>${fi(A.pribFact)} ₽</b> при рентабельности <b>${fp(A.pribFactP)}</b>.</p>
-      <p>К предыдущему месяцу (${MONTHS[pm.mm-1]} ${pm.yy}) выручка ${ar(A.vykr,P.vykr)}, прибыль ${ar(A.pribFact,P.pribFact)}. К тому же месяцу год назад (${mName} ${y-1}) — выручка ${ar(A.vykr,Yq.vykr)}, прибыль ${ar(A.pribFact,Yq.pribFact)}.</p>
-      <p>Средний чек заказа <b>${fi(A.srchek)} ₽</b> (${ar(A.srchek,P.srchek)} м/м). Выкупаемость <b>${fp(A.vkp)}</b>. Расходы: доля рекламы (ДРР) <b>${fp1(A.drr)}</b>, доставка <b>${fp1(A.dostP)}</b> от выручки, хранение <b>${fp1(A.hranP)}</b>, налог <b>${fp1(DIV(A.nalog,A.vykr))}</b>.</p>
-      <p>Нарастающим итогом (январь–${mName}): прибыль <b>${fi(YT.pribFact)} ₽</b> против <b>${fi(YTp.pribFact)} ₽</b> годом ранее (${ar(YT.pribFact,YTp.pribFact)}).</p>
-      <p>Лидеры по прибыли за месяц: ${top.map(x=>`<b>${x.p}</b> (${fi(x.v)} ₽)`).join(', ')||'—'}.${bot.length?` Убыточные предметы: ${bot.map(x=>`<b>${x.p}</b> (${fi(x.v)} ₽)`).join(', ')}.`:''}</p>
-      <p style="color:var(--ink3);font-size:11px">${A.rekEst?'⚠ Реклама за месяц оценена как 300 000 ₽ (записано &lt;30к).':''}</p>
+    <div class="inscol">
+      ${block('💰 Итоги месяца',[
+        `Выручка <b>${fi(A.vykr)} ₽</b>, чистая прибыль <b>${fi(A.pribFact)} ₽</b>, рентабельность <b>${fp(A.pribFactP)}</b>.`,
+        `К предыдущему месяцу (${MONTHS[pm.mm-1]}): выручка ${ar(A.vykr,P.vykr)}, прибыль ${ar(A.pribFact,P.pribFact)}.`,
+        `К тому же месяцу год назад (${mName} ${y-1}): выручка ${ar(A.vykr,Yq.vykr)}, прибыль ${ar(A.pribFact,Yq.pribFact)}.`,
+        `Нарастающим итогом январь–${mName}: прибыль <b>${fi(YT.pribFact)} ₽</b> против <b>${fi(YTp.pribFact)} ₽</b> год назад (${ar(YT.pribFact,YTp.pribFact)}).`,
+        `Лидеры по прибыли: ${top.map(x=>`<b>${x.p}</b> (${fi(x.v)} ₽)`).join(', ')||'—'}.${bot.length?` Убыточные: ${bot.map(x=>`<b>${x.p}</b> (${fi(x.v)} ₽)`).join(', ')}.`:''}`,
+      ],true)}
+      ${block('📣 Реклама',[
+        `Затраты на рекламу <b>${fi(A.rek)} ₽</b> (м/м ${ar(A.rek,P.rek)}, г/г ${ar(A.rek,Yq.rek)}).${A.rekEst?' ⚠ оценка 300 000 ₽ (записано <30к).':''}`,
+        `ДРР от продаж <b>${fp1(A.drrSa)}</b>, от заказов <b>${fp1(A.drr)}</b>.`,
+        `Стоимость привлечения: CPO <b>${fi(A.advCPO)} ₽</b>/заказ, CPS <b>${fi(A.advCPS)} ₽</b>/выкуп.`,
+      ])}
+      ${block('🚚 Логистика',[
+        `Доставка <b>${fi(A.dost)} ₽</b> (<b>${fp1(A.dostP)}</b> от выручки), хранение <b>${fi(A.hran)} ₽</b> (<b>${fp1(A.hranP)}</b>).`,
+        `Log.CPS <b>${fi(A.logCPS)} ₽</b>/выкуп, Stock.CPS <b>${f2(A.stockCPS)} ₽</b>/выкуп.`,
+      ])}
+      ${block('🏠 Постоянные расходы',[
+        `Пост.Р(+акр) <b>${fi(A.postAkr)} ₽</b> = постоянные <b>${fi(A.postAkr-A.acr)} ₽</b> + акруалс <b>${fi(A.acr)} ₽</b>.`,
+        `Fix.CPO <b>${fi(fixcpo)} ₽</b>/заказ.`,
+      ])}
+      ${block('🧾 Средний чек',[
+        `Средний чек заказа <b>${fi(A.srchek)} ₽</b> (м/м ${ar(A.srchek,P.srchek)}, г/г ${ar(A.srchek,Yq.srchek)}), цена выкупа <b>${fi(A.cena)} ₽</b>.`,
+        `Выкупаемость <b>${fp(A.vkp)}</b> (м/м ${pp(A.vkp,P.vkp)}, г/г ${pp(A.vkp,Yq.vkp)}).`,
+      ])}
     </div>`;
 }
 
