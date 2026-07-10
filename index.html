@@ -403,77 +403,105 @@ async function buildModel(){
   function parseOzon(rr){
     if(!rr||!rr.length)return[];
     const H=rr._headers;
-    const c_date=col(H,'Дата начисления'),c_grp=col(H,'Группа услуг'),c_typ=col(H,'Тип начисления'),
-      c_art=col(H,'Артикул'),c_qty=col(H,'Количество'),
-      c_sum=col(H,'Сумма итого, руб.','Сумма итого руб','Сумма итого');
+    const c_date=col(H,'Дата начисления'),
+          c_grp=col(H,'Группа услуг'),
+          c_typ=col(H,'Тип начисления'),
+          c_art=col(H,'Артикул'),
+          c_qty=col(H,'Количество'),
+          c_sum=col(H,'Сумма итого, руб.','Сумма итого руб','Сумма итого');
     if(!c_sum||!c_date)return[];
 
     const eH=(raw.ekon&&raw.ekon._headers)||[];
-    const e_code=col(eH,'Код латиница','Код  латиница'),e_rs=col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ');
-    const ekonByCode={};
-    if(e_code&&e_rs)(raw.ekon||[]).forEach(r=>{const k=lnk(r[e_code]);if(k)ekonByCode[k]=num(r[e_rs]);});
+    const e_code=col(eH,'Код латиница','Код  латиница','Латиница'),
+          e_pa=col(eH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Сцепка'),
+          e_art=col(eH,'Артикул поставщика','Артикул'),
+          e_rs=col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ');
+
+    const ekonRS={};
+    if(e_rs)(raw.ekon||[]).forEach(r=>{
+        const rs=num(r[e_rs]);
+        [e_code&&r[e_code],e_pa&&r[e_pa],e_art&&r[e_art]].forEach(k=>{
+            if(k){const kk=lnk(k);if(kk&&ekonRS[kk]===undefined)ekonRS[kk]=rs;}
+        });
+    });
 
     const cleanCode=art=>{
-      let a=String(art||'').replace('_XL','_1XL');
-      let b=a.split('_')[0];
-      let c=b.split('0')[0];
-      return c.replace(/TermSocks\.Al-ESS\.(black|blue|grey|pink|purp)\./i,'TermSocks.Al-ESS.');
+        let a=String(art||'').replace('_XL','_1XL');
+        let b=a.split('_')[0];
+        let c=b.split('0')[0];
+        return c.replace(/TermSocks\.Al-ESS\.(black|blue|grey|pink|purp)\./i,'TermSocks.Al-ESS.');
     };
 
     const map={};
 
     rr.forEach(r=>{
-      const d=pdate(r[c_date]); if(!d)return;
-      const grp=String(r[c_grp]||'').trim();
-      const typ=String(r[c_typ]||'').trim();
-      const art=String(r[c_art]||'').trim();
-      const qty=Math.abs(num(r[c_qty]));
-      const s=num(r[c_sum]);
+        const d=pdate(r[c_date]); if(!d)return;
+        const grp=String(r[c_grp]||'').trim();
+        const typ=String(r[c_typ]||'').trim();
+        const art=String(r[c_art]||'').trim();
+        const qty=Math.abs(num(r[c_qty]));
+        const s=num(r[c_sum]);
 
-      const base=art.split('_')[0]||art;
-      const rec=artByPostL.get(lnk(base))||artByPostA.get(nk(base));
-      const paG=rec?rec.paG:base;
-      const key=d.getFullYear()+'-'+(d.getMonth()+1)+'|'+paG;
+        const base=art.split('_')[0]||art;
+        const rec=artByPostL.get(lnk(base))||artByPostA.get(nk(base));
+        const paG=rec?rec.paG:base;
+        const paP=rec?rec.paP:'';
+        const key=d.getFullYear()+'-'+(d.getMonth()+1)+'|'+paG;
 
-      const o=map[key]||(map[key]={
-        y:d.getFullYear(),m:d.getMonth()+1,paG,code:cleanCode(art),
-        salesQty:0,orderQty:0,salesRub:0,bonusRub:0,returnRub:0,partnerRub:0,
-        log:0,rek:0,voz:0
-      });
+        const o=map[key]||(map[key]={
+            y:d.getFullYear(),m:d.getMonth()+1,
+            paG,paP,base,code:cleanCode(art),
+            orderQty:0,salesQty:0,
+            salesRub:0,bonusRub:0,returnRub:0,partnerRub:0,
+            log:0,rek:0,voz:0
+        });
 
-      if(typ==='Выручка') o.salesQty+=qty;
-      if(typ==='Логистика') o.orderQty+=qty;
+        if(typ==='Выручка') o.salesQty+=qty;
+        if(typ==='Логистика') o.orderQty+=qty;
 
-      if(typ==='Выручка') o.salesRub+=s;
-      if(typ==='Баллы за скидки') o.bonusRub+=s;
-      if(typ==='Возврат выручки') o.returnRub+=s;
-      if(typ==='Программы партнёров') o.partnerRub+=s;
+        if(typ==='Выручка') o.salesRub+=s;
+        else if(typ==='Баллы за скидки') o.bonusRub+=s;
+        else if(typ==='Возврат выручки') o.returnRub+=s;
+        else if(typ==='Программы партнёров') o.partnerRub+=s;
 
-      if(grp==='Услуги доставки'||grp==='Услуги партнёров'||grp==='Услуги FBO'||grp==='Другие услуги и штрафы') o.log+=s;
-      else if(grp==='Продвижение и реклама') o.rek+=s;
-      else if(grp==='Возвраты'||grp==='Компенсации и декомпенсации') o.voz+=s;
+        if(grp==='Услуги доставки'||grp==='Услуги партнёров'||grp==='Услуги FBO'||grp==='Другие услуги и штрафы') o.log+=s;
+        else if(grp==='Продвижение и реклама') o.rek+=s;
+        else if(grp==='Возвраты'||grp==='Компенсации и декомпенсации') o.voz+=s;
     });
 
-    return Object.values(map).map(o=>{
-      const vykr=Math.round(o.salesRub+o.bonusRub+o.returnRub+o.partnerRub);
-      const price=o.salesQty?vykr/o.salesQty:0;
-      const zakr=Math.round(price*o.orderQty);
-      return {
-        paG:o.paG,y:o.y,m:o.m,
-        zaks:o.orderQty,
-        vyks:o.salesQty,
-        zakr,
-        vykr,
-        rek:Math.round(-o.rek),
-        post:0,
-        nalog:Math.round(vykr*0.07),
-        hran:0,
-        dost:Math.round(-(o.log+o.voz)),
-        perem:Math.round((ekonByCode[lnk(o.code)]||0)*o.salesQty)
-      };
-    });
-  }
+    const rsFor=o=>{
+        let v=ekonRS[lnk(o.code)];
+        if(v!==undefined)return v;
+        if(o.paP){
+            v=ekonRS[lnk(o.paP)];
+            if(v!==undefined)return v;
+            v=ekonRS[lnk(o.paG)];
+            if(v!==undefined)return v;
+        }
+        v=ekonRS[lnk(o.base)];
+        return v||0;
+    };
 
+    const vals=Object.values(map);
+    const out=vals.map(o=>{
+        const vykr=Math.round(o.salesRub+o.bonusRub+o.returnRub+o.partnerRub);
+        const price=o.salesQty?vykr/o.salesQty:0;
+        return{
+            paG:o.paG,y:o.y,m:o.m,
+            zaks:o.orderQty,
+            vyks:o.salesQty,
+            zakr:Math.round(price*o.orderQty),
+            vykr,
+            rek:Math.round(-o.rek),
+            post:0,
+            nalog:Math.round(vykr*0.07),
+            hran:0,
+            dost:Math.round(-(o.log+o.voz)),
+            perem:Math.round(rsFor(o)*o.salesQty)
+        };
+    });
+    return out;
+}
   const obOZ=parseOzon(raw.ozon);
 
   const acForCo=ac=>ac.map(r=>({y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,acr:r.acr}));
