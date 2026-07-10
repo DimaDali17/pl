@@ -166,11 +166,23 @@ async function buildModel(){
         return c.replace(/TermSocks\.Al-ESS\.(black|blue|grey|pink|purp)\./i,'TermSocks.Al-ESS.');
     };
 
+    /* Классификация по ТИПУ начисления (как в PBI), не по группе */
+    const OZ_LOG_TYPES=new Set(["Логистика","Обеспечение материалами для упаковки товара",
+      "Обработка возвратов Ozon","Обработка возвратов, отмен и невыкупов партнёрами",
+      "Обработка отменённых и невостребованных товаров","Обработка частичного невыкупа",
+      "Обратная логистика","Последняя миля","Упаковка товара партнёрами","Эквайринг",
+      "Потеря по вине Ozon в логистике",
+      "Выдача товара - отмена начисления (Сторно возвратов на ПВЗ)",
+      "Логистика - отмена начисления","Доставка до места выдачи - отмена начисления",
+      "Бронирование места и персонала для поставки с неполным составом в составе грузоместа",
+      "Утилизация товара: Вы не забрали в срок","Утилизация товара: Повреждённые из-за упаковки",
+      "Кросс-докинг","Выдача товара","Доставка до места выдачи"]);
+    const OZ_REK_TYPES=new Set(["Вывод в топ","Трафареты","Оплата за клик","Продвижение с оплатой за заказ"]);
+
     const map={};
 
     rr.forEach(r=>{
         const d=pdate(r[c_date]); if(!d)return;
-        const grp=String(r[c_grp]||'').trim();
         const typ=String(r[c_typ]||'').trim();
         const art=String(r[c_art]||'').trim();
         const qty=Math.abs(num(r[c_qty]));
@@ -187,22 +199,21 @@ async function buildModel(){
             paG,paP,base,code:cleanCode(art),
             orderQty:0,salesQty:0,
             salesRub:0,bonusRub:0,returnRub:0,partnerRub:0,
-            kom:0,
-            log:0,rek:0,voz:0
+            kom:0,log:0,rek:0
         });
 
+        /* Штуки */
         if(typ==='Выручка') o.salesQty+=qty;
         if(typ==='Логистика') o.orderQty+=qty;
 
+        /* Рубли — единая цепочка по ТИПУ начисления (PBI-совместимо) */
         if(typ==='Выручка') o.salesRub+=s;
         else if(typ==='Баллы за скидки') o.bonusRub+=s;
         else if(typ==='Возврат выручки') o.returnRub+=s;
         else if(typ==='Программы партнёров') o.partnerRub+=s;
         else if(typ==='Вознаграждение за продажу'||typ==='Возврат вознаграждения') o.kom+=s;
-
-        if(grp==='Услуги доставки'||grp==='Услуги партнёров'||grp==='Услуги FBO'||grp==='Другие услуги и штрафы') o.log+=s;
-        else if(grp==='Продвижение и реклама') o.rek+=s;
-        else if(grp==='Возвраты'||grp==='Компенсации и декомпенсации') o.voz+=s;
+        else if(OZ_LOG_TYPES.has(typ)) o.log+=s;
+        else if(OZ_REK_TYPES.has(typ)) o.rek+=s;
     });
 
     const rsFor=o=>{
@@ -233,7 +244,7 @@ async function buildModel(){
             post:0,
             nalog:Math.round(vykr*0.07),
             hran:0,
-            dost:Math.round(-(o.log+o.voz)),
+            dost:Math.round(-o.log),
             perem:Math.round(rsFor(o)*o.salesQty)
         };
     });
