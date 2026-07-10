@@ -356,7 +356,7 @@ async function buildModel(){
     rr.forEach(r=>{ const d=pdate(r[c_den]); if(!d)return; const post=(r[c_post]||'').trim();
       const rec=artByPostL.get(lnk(post))||artByPostA.get(nk(post)); const paG=rec?rec.paG:('#'+post);
       const perech=num(r[c_per]); const nalog=taxFlat!=null?Math.round(perech*taxFlat):Math.round(perech*(d>=TAX?0.11:0.07));
-      out.push({date:d,paG,zaks:intn(r[c_zaks]),vyks:intn(r[c_vyks]),zakr:num(r[c_zakr]),vykr:perech,nalog}); });
+      out.push({date:d,paG,zaks:intn(r[c_zaks]),vyks:intn(r[c_vyks]),zakr:num(r[c_zakr]),vykr:perech,kom:0,nalog}); });
     return out;
   }
   function parseLog(rr){
@@ -453,6 +453,7 @@ async function buildModel(){
             paG,paP,base,code:cleanCode(art),
             orderQty:0,salesQty:0,
             salesRub:0,bonusRub:0,returnRub:0,partnerRub:0,
+            kom:0,
             log:0,rek:0,voz:0
         });
 
@@ -463,6 +464,7 @@ async function buildModel(){
         else if(typ==='Баллы за скидки') o.bonusRub+=s;
         else if(typ==='Возврат выручки') o.returnRub+=s;
         else if(typ==='Программы партнёров') o.partnerRub+=s;
+        else if(typ==='Вознаграждение за продажу' || typ==='Возврат вознаграждения') o.kom+=s;
 
         if(grp==='Услуги доставки'||grp==='Услуги партнёров'||grp==='Услуги FBO'||grp==='Другие услуги и штрафы') o.log+=s;
         else if(grp==='Продвижение и реклама') o.rek+=s;
@@ -492,6 +494,7 @@ async function buildModel(){
             vyks:o.salesQty,
             zakr:Math.round(price*o.orderQty),
             vykr,
+            kom:Math.round(o.kom),
             rek:Math.round(-o.rek),
             post:0,
             nalog:Math.round(vykr*0.07),
@@ -531,9 +534,9 @@ function groupBy(arr,kf,af){const m=new Map();for(const x of arr){const k=kf(x);
 /* ═══════════ ДВИЖОК МЕР ═══════════ */
 const DIV=(a,b)=>b?a/b:0;
 const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
-function agg(y,mset,filt){ const a={zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0};
+function agg(y,mset,filt){ const a={zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0};
   for(const r of M.obshiy){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
-    a.zaks+=r.zaks;a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem; }
+    a.zaks+=r.zaks;a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem; }
   return a; }
 function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
 function postRv(y,mArr,filt){ const a=agg(y,new Set(mArr),filt); if(a.post!==0)return a.post;
@@ -555,9 +558,9 @@ function meas(y,mArr,filt){
       if(ruleApplies(y,m)&&r<30000){ r=300000; if(mArr.length===1)rekEst=true; }
       rek+=r; }
   }
-  const pribOper=a.vykr-a.perem-a.dost-a.hran-a.nalog;
+  const pribOper=a.vykr+a.kom-a.perem-a.dost-a.hran-a.nalog;
   const postAkr=pR+acr;
-  const pribFact=a.vykr-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr;
+  const pribFact=a.vykr+a.kom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr;
   return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr:a.vykr,cena:DIV(a.vykr,a.vyks),
     perem:a.perem,dost:a.dost,drl:DIV(a.dost,a.vykr),hran:a.hran,nalog:a.nalog,
     pribOper,pribOperP:DIV(pribOper,a.vykr),postAkr,rek,rekEst,drr:DIV(rek,a.zakr),
@@ -586,6 +589,7 @@ const COLS=[
   {k:'dost',l:'Дставка',f:fi,t:'Доставка (лист Лог+Хран)'},
   {k:'drl',l:'ДРЛ%',f:fp,t:'Доля логистики = Доставка ÷ Выкуп,руб'},
   {k:'hran',l:'Хранен',f:fi,t:'Хранение (лист Лог+Хран)'},
+  {k:'kom',l:'Ком.МП',f:fi,t:'Комиссия маркетплейса'},
   {k:'nalog',l:'Налог',f:fi,t:'Налог: 7% до 01.02.2026, далее 11% от К перечислению'},
   {k:'pribOper',l:'Пр.Опер',f:fi,t:'Операционная прибыль = Выкуп,руб − Переменные − Доставка − Хранение − Налог'},
   {k:'pribOperP',l:'Оп%',f:fp,hl:1,t:'Прибыль.Опер ÷ Выкуп,руб'},
