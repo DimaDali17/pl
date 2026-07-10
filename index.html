@@ -298,7 +298,9 @@ async function buildModel(){
   if(!CFG.worker && !CFG.report) throw new Error('Не задан ни воркер, ни прямые ссылки (см. Настройки).');
   const texts=await loadRawTexts(diag);
   const raw={};
-  SHEETS.forEach(k=>{ raw[k]=toObjects(parseCSV(texts[k]||''));
+  SHEETS.forEach(k=>{ let rows=parseCSV(texts[k]||'');
+    if(k==='ozon'){ const hi=rows.findIndex(r=>r.some(c=>/тип начисления|сумма итого/i.test(String(c)))); if(hi>0)rows=rows.slice(hi); }
+    raw[k]=toObjects(rows);
     const need=REQ.includes(k);
     diag.push({name:k,status:(raw[k].length?'ok':(need?'err':'warn')),rows:raw[k].length,cols:(raw[k]._headers||[]).length}); });
   if(!raw.report.length||!raw.rashod.length) throw new Error('Не пришли обязательные листы (report/расход). Проверьте пароль и секреты воркера.');
@@ -397,7 +399,41 @@ async function buildModel(){
   const obEF=buildCo(salesEF,parseLog(raw.log),xEF,raw.sht);
   acGroup.forEach(r=>obEF.push({paG:r.paG,y:r.date.getFullYear(),m:r.date.getMonth()+1,zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}));
   const obEZ=buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2);
-  const obOZ=[]; // Ozon — заглушка до появления OZON_URL и парсера структуры
+  /* ── Ozon: отчёт по начислениям → схема Общего ── */
+  function parseOzon(rr){
+    if(!rr||!rr.length)return[];
+    const H=rr._headers;
+    const c_date=col(H,'Дата начисления'),c_grp=col(H,'Группа услуг'),c_typ=col(H,'Тип начисления'),
+      c_art=col(H,'Артикул'),c_qty=col(H,'Количество'),c_sum=col(H,'Сумма итого, руб.','Сумма итого руб','Сумма итого');
+    if(!c_sum||!c_date)return[];
+    /* экон по «Код латиница» за Расход-ШТ (общий лист) */
+    const eH=(raw.ekon&&raw.ekon._headers)||[];
+    const e_code=col(eH,'Код латиница','Код  латиница'),e_rs=col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ');
+    const ekonByCode={}; if(e_code&&e_rs)(raw.ekon||[]).forEach(r=>{const k=lnk(r[e_code]);if(k)ekonByCode[k]=num(r[e_rs]);});
+    const cleanCode=art=>{ let a=String(art||'').replace('_XL','_1XL'); let b=a.split('_')[0]; let c=b.split('0')[0];
+      return c.replace(/TermSocks\.Al-ESS\.(black|blue|grey|pink|purp)\./i,'TermSocks.Al-ESS.'); };
+    const map={};
+    rr.forEach(r=>{ const d=pdate(r[c_date]); if(!d)return;
+      const grp=String(r[c_grp]||'').trim(),typ=String(r[c_typ]||'').trim(),art=String(r[c_art]||'').trim();
+      const qty=num(r[c_qty]),s=num(r[c_sum]); const base=art.split('_')[0]||art;
+      const rec=artByPostL.get(lnk(base))||artByPostA.get(nk(base)); const paG=rec?rec.paG:base;
+      const key=d.getFullYear()+'-'+(d.getMonth()+1)+'|'+paG;
+      const o=map[key]||(map[key]={y:d.getFullYear(),m:d.getMonth()+1,paG,code:cleanCode(art),prod:0,kom:0,log:0,rek:0,voz:0,qty:0});
+      if(grp==='Продажи')o.prod+=s;
+      else if(grp==='Вознаграждение Ozon')o.kom+=s;
+      else if(grp==='Услуги доставки'||grp==='Услуги партнёров'||grp==='Услуги FBO'||grp==='Другие услуги и штрафы')o.log+=s;
+      else if(grp==='Продвижение и реклама')o.rek+=s;
+      else if(grp==='Возвраты'||grp==='Компенсации и декомпенсации')o.voz+=s;
+      if(typ==='Выручка')o.qty+=qty;
+    });
+    return Object.values(map).map(o=>{
+      const vykr=Math.round(o.prod+o.kom);            // выручка после комиссии Ozon (kom отрицательна)
+      const dost=Math.round(-(o.log+o.voz));          // логистика+возвраты как положительный расход
+      const rek=Math.round(-o.rek), perem=Math.round((ekonByCode[lnk(o.code)]||0)*o.qty), nalog=Math.round(vykr*0.07);
+      return {paG:o.paG,y:o.y,m:o.m,zaks:o.qty,vyks:o.qty,zakr:vykr,vykr,rek,post:0,nalog,hran:0,dost,perem};
+    });
+  }
+  const obOZ=parseOzon(raw.ozon);
 
   const acForCo=ac=>ac.map(r=>({y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,acr:r.acr}));
   const postEF=(raw.post&&raw.post.length)?(function(){const pH=raw.post._headers;const p_s=col(pH,'Сумма'),p_d=col(pH,'Дата');
@@ -444,7 +480,7 @@ function meas(y,mArr,filt){
   const isAgg=(filt==null)||filt.agg===true;                 // правило рекламы — только на агрегате (весь месяц), не внутри предмета/артикула
   const mset=new Set(mArr); const a=agg(y,mset,filt); const acr=acrSum(y,mset,filt); const pR=postRv(y,mArr,filt);
   let rek=a.rek, rekEst=false;
-  if(isAgg){
+  if(isAgg && curCo!=='EZFR' && curCo!=='OZON'){   // правило 300к — только WB-кабинет EF (и Консолид), не EZFR/Ozon
     rek=0;
     for(const m of mArr){ let r=agg(y,new Set([m]),filt).rek;
       if(ruleApplies(y,m)&&r<30000){ r=300000; if(mArr.length===1)rekEst=true; }
