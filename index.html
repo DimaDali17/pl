@@ -406,19 +406,29 @@ async function buildModel(){
     const c_date=col(H,'Дата начисления'),c_grp=col(H,'Группа услуг'),c_typ=col(H,'Тип начисления'),
       c_art=col(H,'Артикул'),c_qty=col(H,'Количество'),c_sum=col(H,'Сумма итого, руб.','Сумма итого руб','Сумма итого');
     if(!c_sum||!c_date)return[];
-    /* экон по «Код латиница» за Расход-ШТ (общий лист) */
+    /* экон Расход-ШТ — индексируем по НЕСКОЛЬКИМ формам ключа (общий лист) */
     const eH=(raw.ekon&&raw.ekon._headers)||[];
-    const e_code=col(eH,'Код латиница','Код  латиница'),e_rs=col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ');
-    const ekonByCode={}; if(e_code&&e_rs)(raw.ekon||[]).forEach(r=>{const k=lnk(r[e_code]);if(k)ekonByCode[k]=num(r[e_rs]);});
+    const e_code=col(eH,'Код латиница','Код  латиница','Латиница'),
+          e_pa=col(eH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Сцепка'),
+          e_art=col(eH,'Артикул поставщика','Артикул'),
+          e_rs=col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ');
+    const ekonRS={};
+    if(e_rs)(raw.ekon||[]).forEach(r=>{ const rs=num(r[e_rs]);
+      [e_code&&r[e_code],e_pa&&r[e_pa],e_art&&r[e_art]].forEach(k=>{ if(k!=null&&k!==''){const kk=lnk(k); if(kk&&ekonRS[kk]===undefined)ekonRS[kk]=rs;} }); });
+    /* код латиница: до "_", до "0", схлопывание цветов TermSocks (как в PBI) */
     const cleanCode=art=>{ let a=String(art||'').replace('_XL','_1XL'); let b=a.split('_')[0]; let c=b.split('0')[0];
       return c.replace(/TermSocks\.Al-ESS\.(black|blue|grey|pink|purp)\./i,'TermSocks.Al-ESS.'); };
+    const rsFor=o=>{ let v=ekonRS[lnk(o.code)]; if(v!==undefined)return v;
+      if(o.paP){ v=ekonRS[lnk(o.paP)]; if(v!==undefined)return v; v=ekonRS[lnk(o.paG)]; if(v!==undefined)return v; }
+      v=ekonRS[lnk(o.base)]; if(v!==undefined)return v; return 0; };
     const map={};
     rr.forEach(r=>{ const d=pdate(r[c_date]); if(!d)return;
       const grp=String(r[c_grp]||'').trim(),typ=String(r[c_typ]||'').trim(),art=String(r[c_art]||'').trim();
       const qty=num(r[c_qty]),s=num(r[c_sum]); const base=art.split('_')[0]||art;
       const rec=artByPostL.get(lnk(base))||artByPostA.get(nk(base)); const paG=rec?rec.paG:base;
       const key=d.getFullYear()+'-'+(d.getMonth()+1)+'|'+paG;
-      const o=map[key]||(map[key]={y:d.getFullYear(),m:d.getMonth()+1,paG,code:cleanCode(art),prod:0,kom:0,log:0,rek:0,voz:0,qty:0});
+      const o=map[key]||(map[key]={y:d.getFullYear(),m:d.getMonth()+1,paG,base,code:cleanCode(art),paP:rec?rec.paP:'',rgP:rec?rec.paG:'',prod:0,kom:0,log:0,rek:0,voz:0,qty:0});
+      o.paG2=paG;
       if(grp==='Продажи')o.prod+=s;
       else if(grp==='Вознаграждение Ozon')o.kom+=s;
       else if(grp==='Услуги доставки'||grp==='Услуги партнёров'||grp==='Услуги FBO'||grp==='Другие услуги и штрафы')o.log+=s;
@@ -426,12 +436,15 @@ async function buildModel(){
       else if(grp==='Возвраты'||grp==='Компенсации и декомпенсации')o.voz+=s;
       if(typ==='Выручка')o.qty+=qty;
     });
-    return Object.values(map).map(o=>{
-      const vykr=Math.round(o.prod+o.kom);            // выручка после комиссии Ozon (kom отрицательна)
-      const dost=Math.round(-(o.log+o.voz));          // логистика+возвраты как положительный расход
-      const rek=Math.round(-o.rek), perem=Math.round((ekonByCode[lnk(o.code)]||0)*o.qty), nalog=Math.round(vykr*0.07);
-      return {paG:o.paG,y:o.y,m:o.m,zaks:o.qty,vyks:o.qty,zakr:vykr,vykr,rek,post:0,nalog,hran:0,dost,perem};
-    });
+    const vals=Object.values(map); let hit=0,tot=0;
+    const out=vals.map(o=>{ o.paG=o.paG; const rs=rsFor(o); tot++; if(rs)hit++;
+      const vykr=Math.round(o.prod+o.kom), dost=Math.round(-(o.log+o.voz)), rek=Math.round(-o.rek),
+            perem=Math.round(rs*o.qty), nalog=Math.round(vykr*0.07);
+      return {paG:o.paG,y:o.y,m:o.m,zaks:o.qty,vyks:o.qty,zakr:vykr,vykr,rek,post:0,nalog,hran:0,dost,perem}; });
+    diag.push({name:'Ozon Расход-ШТ',status:hit?(hit<tot*0.5?'warn':'ok'):'err',rows:hit,
+      msg:`${hit} из ${tot} товаров нашли Расход-ШТ · экон-колонка: ${e_rs||'—'} · код-колонка: ${e_code||e_pa||e_art||'—'}`});
+    if(vals[0])diag.push({name:'  Ozon пример',status:'warn',rows:0,msg:`код «${vals[0].code}» · база «${vals[0].base}» · справочник «${vals[0].paP||'—'}»`});
+    return out;
   }
   const obOZ=parseOzon(raw.ozon);
 
