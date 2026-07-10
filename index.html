@@ -1,918 +1,222 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>P&L продаж — дашборд</title>
-<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#F0EBE1;--bg2:#E8E1D4;--bg3:#FAF8F4;--card:#FFF;--border:rgba(160,148,128,.25);--border2:rgba(160,148,128,.45);--ink:#1A1610;--ink2:#6B6357;--ink3:#A09688;--green:#2D7A4F;--red:#B84040;--amber:#A06820;--blue:#005BFF;--hl:#FBF3D6;--hl2:#F4E9C4;--py:#7C6F55;}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Comfortaa',sans-serif;background:var(--bg);color:var(--ink);font-size:13px}
-.header{background:var(--bg2);border-bottom:1px solid var(--border2);padding:0 16px;height:56px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
-.logo{width:34px;height:34px;border-radius:9px;background:var(--ink);color:var(--bg3);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
-.bname{font-size:15px;font-weight:700}.bsub{font-size:8px;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase}
-.tabs{display:flex;gap:2px;background:var(--bg);border-radius:8px;padding:3px;margin-left:14px}
-.tab{padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:0;color:var(--ink3);font-family:inherit;white-space:nowrap}
-.tab.on{background:var(--ink);color:var(--bg3)}
-.hright{margin-left:auto;display:flex;align-items:center;gap:8px}
-.clock{font-size:11px;color:var(--ink2);white-space:nowrap}
-.b{padding:6px 11px;background:0;border:1px solid var(--border2);border-radius:7px;font-size:11px;font-weight:600;color:var(--ink2);cursor:pointer;font-family:inherit;white-space:nowrap}
-.b:hover{background:var(--ink);color:var(--bg3);border-color:var(--ink)}.b:disabled{opacity:.4;cursor:default}
-.b.pri{background:var(--ink);color:var(--bg3);border-color:var(--ink)}
-.b.act{background:var(--amber);color:#fff;border-color:var(--amber)}
-/* settings */
-.sov{display:none;position:fixed;inset:0;background:rgba(240,235,225,.95);backdrop-filter:blur(6px);z-index:200;align-items:center;justify-content:center}
-.sov.show{display:flex}
-.sc{background:var(--card);border:1px solid var(--border2);border-radius:16px;padding:26px;width:560px;box-shadow:0 8px 40px rgba(0,0,0,.1);max-height:92vh;overflow-y:auto}
-.slogo{display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.stitle{font-size:19px;font-weight:700}.ssub{font-size:10px;color:var(--ink3);letter-spacing:.1em;text-transform:uppercase}
-.sinfo{font-size:11px;color:var(--ink2);line-height:1.5;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:14px 0}
-.ssec{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.fg{margin-bottom:9px}
-.fl{font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:700}.fl .opt{color:var(--amber)}
-.fi{width:100%;padding:8px 12px;font-size:11px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--ink);font-family:inherit;outline:0}
-.fi:focus{border-color:var(--ink)}
-.sbtn{width:100%;padding:12px;background:var(--ink);color:var(--bg3);border:0;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px}
-.smsg{font-size:12px;margin-top:10px;text-align:center;white-space:pre-line}.smsg.err{color:var(--red)}.smsg.ok{color:var(--green)}
-/* layout */
-.main{padding:14px 16px;max-width:2000px;margin:0 auto}
-.fbar{background:var(--card);border:1px solid var(--border2);border-radius:11px;padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-.fitem{display:flex;align-items:center;gap:7px}
-.fitem>label{font-size:10px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
-.sel{padding:5px 9px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--ink);font-family:inherit;outline:0;cursor:pointer}
-.sel:focus{border-color:var(--ink)}
-.search{padding:5px 9px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--ink);font-family:inherit;outline:0;min-width:200px}
-.ctog{display:inline-flex;background:var(--bg);border-radius:7px;padding:2px;gap:1px}
-.ctog button{padding:5px 11px;border:0;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;background:0;color:var(--ink3)}
-.ctog button.on{background:var(--ink);color:var(--bg3)}
-.fspacer{margin-left:auto;font-size:10px;color:var(--ink3)}
-/* kpi */
-.mg{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-.mc{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:12px 15px}
-.ml{font-size:9px;color:var(--ink3);text-transform:uppercase;letter-spacing:.12em;font-weight:700;margin-bottom:6px}
-.mv{font-size:23px;font-weight:700;line-height:1}.mv.g{color:var(--green)}.mv.r{color:var(--red)}
-.md{font-size:11px;margin-top:5px;color:var(--ink3)}.md .du{color:var(--green);font-weight:700}.md .dd{color:var(--red);font-weight:700}
-/* section/table */
-.sec{margin-bottom:16px}
-.sh{display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;margin-bottom:9px;border-bottom:1px solid var(--border2);flex-wrap:wrap;gap:8px}
-.st{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.1em}
-.sm2{font-size:11px;color:var(--ink3)}
-.sw{background:var(--card);border:1px solid var(--border);border-radius:11px;overflow-x:auto}
-table{width:100%;border-collapse:collapse}
-#page-adv table,#page-log table,#page-fix table,#page-check table{width:100%;table-layout:fixed}
-#page-adv td,#page-adv th,#page-log td,#page-log th,#page-fix td,#page-fix th,#page-check td,#page-check th{padding:4px 6px;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#page-adv th:first-child,#page-adv td:first-child,#page-log th:first-child,#page-log td:first-child,#page-fix th:first-child,#page-fix td:first-child,#page-check th:first-child,#page-check td:first-child{width:19%}
-thead th{text-align:right;padding:5px 7px;font-size:8.5px;font-weight:700;color:var(--ink3);background:var(--bg3);text-transform:uppercase;letter-spacing:.02em;border-bottom:1px solid var(--border);font-family:inherit;white-space:nowrap;position:sticky;top:0;z-index:5;line-height:1.15}
-thead th:first-child{text-align:left}
-thead th.hl{background:var(--hl2)!important;color:var(--amber)!important}
-thead th.py{color:var(--py)!important;font-style:italic}
-tbody td{padding:4px 7px;color:var(--ink);border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:11.5px;position:relative}
-tbody td:first-child{text-align:left;font-weight:700;color:var(--ink2)}
-tbody tr:hover{background:var(--bg3)}
-tbody td.hl{background:var(--hl)}
-tbody td.py{color:var(--py);font-size:10.5px;background:rgba(124,111,85,.05)}
-tbody td.est span.v{color:#9a9186;font-style:italic}
-tbody td.est{background:rgba(150,140,120,.10)}
-thead th{cursor:help}
-tbody tr.total td{font-weight:700;background:var(--bg2)!important;border-top:2px solid var(--border2);border-bottom:0}
-tbody tr.empty td{color:var(--ink3)}
-.pos{color:var(--green)}.neg{color:var(--red)}
-.bar{position:absolute;top:2px;bottom:2px;right:2px;border-radius:3px;opacity:.28;z-index:0}
-.bar.bl{background:var(--blue)}.bar.g{background:var(--green)}.bar.r{background:var(--red)}
-td span.v{position:relative;z-index:1}
-/* charts (Прибыль) */
-.chartgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-.chartbox{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:14px 16px}
-.chartttl{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
-.barrow{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:11px}
-.barrow .lbl{width:120px;color:var(--ink2);font-weight:600;flex-shrink:0}
-.barrow .track{flex:1;background:var(--bg3);border-radius:4px;height:20px;position:relative;overflow:hidden}
-.barrow .fill{position:absolute;top:0;bottom:0;left:0;border-radius:4px;background:var(--green)}
-.barrow .fill.neg{background:var(--red)}
-.barrow .num{width:90px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
-.mom{display:flex;gap:4px;align-items:flex-end;height:96px}
-.momcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px}
-.momval{font-size:8.5px;color:var(--ink3);font-weight:700;height:11px}
-.mombars{display:flex;gap:3px;align-items:flex-end;height:58px}
-.mombars .mb{width:15px;border-radius:2px 2px 0 0}
-.mombars .cur{background:var(--green)}.mombars .prv{background:#B7D9C4}
-/* svg chart */
-.svgbox{width:100%}
-.leg{display:flex;gap:14px;font-size:10px;color:var(--ink2);margin-bottom:8px;font-weight:700}
-.leg span{display:inline-flex;align-items:center;gap:5px}
-.leg i{width:12px;height:12px;border-radius:3px;display:inline-block}
-/* diag */
-.diag{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:8px;font-size:11px;color:var(--ink2);display:none}
-.diag.show{display:block}
-.diag table{width:auto}.diag td{border:0;padding:2px 14px 2px 0;text-align:left;white-space:nowrap;position:static}
-.diag .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.dot.ok{background:var(--green)}.dot.warn{background:var(--amber)}.dot.err{background:var(--red)}
-.lm{padding:60px;text-align:center;color:var(--ink3)}
-.loadbtn{margin-top:12px;padding:8px 18px;background:var(--ink);color:var(--bg3);border:0;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit}
-.scaffold{background:var(--card);border:1px dashed var(--border2);border-radius:11px;padding:24px;color:var(--ink3);font-size:12px;line-height:1.6}
-.inscol{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1100px;align-items:start}
-.insb{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px}
-.insb.full{grid-column:1/-1}
-.insh{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px}
-.insl{font-size:12.5px;line-height:1.65;color:var(--ink2);padding:4px 0;border-top:1px solid var(--border)}
-.insl:first-of-type{border-top:0}
-.insl b{color:var(--ink)}
-@media(max-width:820px){.inscol{grid-template-columns:1fr}}
-@media(max-width:900px){.mg{grid-template-columns:repeat(2,1fr)}.chartgrid{grid-template-columns:1fr}}
-</style>
-</head>
-<body>
+function parseOzon(rr){
+    if(!rr || !rr.length) return [];
 
-<!-- SETTINGS -->
-<div class="sov" id="setup">
-  <div class="sc">
-    <div class="slogo"><div class="logo">P&L</div><div><div class="stitle">P&amp;L продаж</div><div class="ssub">Google Sheets Dashboard</div></div></div>
-    <div class="sinfo">Данные идут через твой Cloudflare Worker по паролю. Ссылки на таблицы лежат в секретах воркера — в этой странице их нет. Пароль хранится только в этом браузере (localStorage).</div>
-    <div class="ssec">Доступ через Worker</div>
-    <div class="fg"><div class="fl">URL воркера</div><input class="fi" id="u_worker" placeholder="https://pl-proxy.…workers.dev"></div>
-    <div class="fg"><div class="fl">Пароль</div><input class="fi" id="u_pass" type="password" placeholder="ACCESS_PASSWORD"></div>
+    const H = rr._headers;
 
-    <div class="ssec" style="cursor:pointer" onclick="document.getElementById('directBox').style.display=document.getElementById('directBox').style.display==='none'?'block':'none'">▸ Прямые ссылки <span class="opt" style="text-transform:none;letter-spacing:0">(только локальная отладка — не для публичного GitHub!)</span></div>
-    <div id="directBox" style="display:none">
-      <div class="fg"><div class="fl">report</div><input class="fi" id="u_report"></div>
-      <div class="fg"><div class="fl">расход</div><input class="fi" id="u_rashod"></div>
-      <div class="fg"><div class="fl">артикулы</div><input class="fi" id="u_art"></div>
-      <div class="fg"><div class="fl">Лог+Хран</div><input class="fi" id="u_log"></div>
-      <div class="fg"><div class="fl">ШТУК</div><input class="fi" id="u_sht"></div>
-      <div class="fg"><div class="fl">Acruals</div><input class="fi" id="u_acr"></div>
-      <div class="fg"><div class="fl">ПОСТ затраты архив <span class="opt">Fix.CPO</span></div><input class="fi" id="u_post"></div>
-      <div class="fg"><div class="fl">экон <span class="opt">U.* меры</span></div><input class="fi" id="u_ekon"></div>
-    </div>
-    <button class="sbtn" onclick="saveAndLoad()">Сохранить и загрузить</button>
-    <div class="smsg" id="smsg"></div>
-  </div>
-</div>
+    const c_date = col(H,'Дата начисления');
+    const c_grp  = col(H,'Группа услуг');
+    const c_typ  = col(H,'Тип начисления');
+    const c_art  = col(H,'Артикул');
+    const c_qty  = col(H,'Количество');
+    const c_sum  = col(H,'Сумма итого, руб.','Сумма итого руб','Сумма итого');
 
-<!-- HEADER -->
-<div class="header">
-  <div class="logo">P&L</div>
-  <div><div class="bname">P&amp;L продаж</div><div class="bsub">Wildberries</div></div>
-  <div class="tabs" id="tabs">
-    <button class="tab on" data-p="pl" onclick="tab('pl')">P&amp;L</button>
-    <button class="tab" data-p="profit" onclick="tab('profit')">Прибыль</button>
-    <button class="tab" data-p="adv" onclick="tab('adv')">Реклама</button>
-    <button class="tab" data-p="log" onclick="tab('log')">Логистика</button>
-    <button class="tab" data-p="fix" onclick="tab('fix')">Пост.Р</button>
-    <button class="tab" data-p="check" onclick="tab('check')">Чек</button>
-    <button class="tab" data-p="insights" onclick="tab('insights')">Инсайты</button>
-  </div>
-  <div class="hright">
-    <div class="clock" id="clk"></div>
-    <button class="b" onclick="toggleDiag()">◧ диагностика</button>
-    <button class="b" onclick="openSetup()">⚙ настройки</button>
-    <button class="b pri" id="reloadBtn" onclick="reload()">↻ обновить</button>
-  </div>
-</div>
+    if(!c_sum || !c_date) return [];
 
-<div class="main">
-  <!-- FILTER BAR -->
-  <div class="fbar" id="fbar" style="display:none">
-    <div class="fitem"><label>Компания</label><select class="sel" id="fCo" onchange="switchCo(this.value)">
-      <option value="EF">EF</option><option value="EZFR">EZFR</option><option value="OZON">OZON</option><option value="CONS">Консолид</option>
-    </select></div>
-    <div class="fitem"><label>Год</label><select class="sel" id="fYear" onchange="render()"></select></div>
-    <div class="fitem"><label>Месяц</label><select class="sel" id="fMonth" onchange="render()"><option value="">Все</option></select></div>
-    <div class="fitem"><label>Артикул</label><input class="search" id="fSearch" list="artList" placeholder="поиск…" oninput="debouncedRender()"><datalist id="artList"></datalist></div>
-    <div class="fitem" id="grpWrap"><label>Срез</label><div class="ctog" id="grp">
-      <button class="on" data-g="month" onclick="setGrp('month')">Месяц</button>
-      <button data-g="predmet" onclick="setGrp('predmet')">Предмет</button>
-      <button data-g="artikul" onclick="setGrp('artikul')">Артикул</button>
-    </div></div>
-    <div class="fitem" id="pyWrap"><button class="b" id="pyBtn" onclick="togglePY()">＋ прошлый год</button></div>
-    <div class="fspacer" id="fInfo"></div>
-  </div>
+    // ===== Переменные (экономика) =====
 
-  <!-- PL PAGE -->
-  <div id="page-pl">
-    <div id="kpi" class="mg" style="display:none"></div>
-    <div class="sec" id="matrixSec" style="display:none">
-      <div class="sh"><div class="st" id="matrixTtl">P&amp;L по месяцам</div><div class="sm2" id="matrixSub"></div></div>
-      <div class="sw"><table id="matrix"></table></div>
-      <div class="diag" id="diag"></div>
-    </div>
-  </div>
+    const eH = (raw.ekon && raw.ekon._headers) || [];
 
-  <!-- other pages -->
-  <div id="page-profit" style="display:none"></div>
-  <div id="page-adv" style="display:none"></div>
-  <div id="page-log" style="display:none"></div>
-  <div id="page-fix" style="display:none"></div>
-  <div id="page-check" style="display:none"></div>
-  <div id="page-insights" style="display:none"></div>
+    const e_code = col(eH,'Код латиница','Код  латиница');
+    const e_rs   = col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ');
 
-  <div id="placeholder" class="lm">⚙ Укажите ссылки в настройках<div><button class="loadbtn" onclick="openSetup()">Открыть настройки</button></div></div>
-</div>
+    const ekonByCode = {};
 
-<script>
-/* ═══════════ CONFIG ═══════════ */
-/* НИКАКИХ ссылок на таблицы в коде — они в секретах воркера.
-   Здесь только пусто: конфиг вводится в «Настройках» и хранится в localStorage этого браузера. */
-const DEFAULTS={ worker:'', pass:'', report:'',rashod:'',art:'',log:'',sht:'',acr:'',post:'',ekon:'' };
-const LS_KEY='pl_cfg_v3';
-let CFG={...DEFAULTS};
-const MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-let M={obshiy:[],acruals:[],postR:[],years:[],loaded:false,diag:[],artByPaG:{}};
-let grpMode='month', pyOn=false, curTab='pl', curCo='EF';
-
-/* ═══════════ ПАРСЕРЫ ═══════════ */
-function parseCSV(text){
-  const rows=[];let row=[],field='',q=false;text=text.replace(/\r/g,'');
-  for(let i=0;i<text.length;i++){const c=text[i];
-    if(q){ if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else q=false; } else field+=c; }
-    else { if(c==='"')q=true; else if(c===','){row.push(field);field='';} else if(c==='\n'){row.push(field);rows.push(row);row=[];field='';} else field+=c; }
-  }
-  if(field!==''||row.length){row.push(field);rows.push(row);} return rows;
-}
-function toObjects(rows){
-  if(!rows.length)return[]; const hdr=rows[0].map(h=>String(h).trim()); const out=[];
-  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(r.every(c=>String(c).trim()===''))continue;
-    const o={}; hdr.forEach((h,j)=>o[h]=r[j]!==undefined?r[j]:''); out.push(o); }
-  out._headers=hdr; return out;
-}
-function num(v){ if(v==null)return 0; if(typeof v==='number')return v;
-  let s=String(v).trim(); if(s===''||s==='-')return 0; s=s.replace(/[\s\u00a0\u202f₽%]/g,'');
-  const hasDot=s.includes('.'),hasCom=s.includes(',');
-  if(hasDot&&hasCom)s=s.replace(/,/g,'');
-  else if(hasCom){ const p=s.split(','); if(p[p.length-1].length===3&&p.length>1&&p[0].length<=3)s=s.replace(/,/g,''); else s=s.replace(',','.'); }
-  const n=parseFloat(s); return isNaN(n)?0:n;
-}
-const intn=v=>Math.round(num(v));
-function pdate(v){ if(v instanceof Date)return v; if(v==null)return null;
-  let s=String(v).trim(); if(!s)return null; let m,d=null;
-  if(m=s.match(/^Date\((\d+),(\d+),(\d+)/))d=new Date(+m[1],+m[2],+m[3]);
-  else if(m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))d=new Date(+m[1],+m[2]-1,+m[3]);
-  else if(m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/))d=new Date(+m[3],+m[2]-1,+m[1]);
-  else if(m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)){let a=+m[1],b=+m[2]; d=a>12?new Date(+m[3],b-1,a):new Date(+m[3],a-1,b);}
-  else { const t=new Date(s); d=isNaN(t)?null:t; }
-  if(!d||isNaN(d))return null; const y=d.getFullYear(); if(y<2015||y>2100)return null; return d;
-}
-function col(headers,...names){
-  const norm=h=>String(h).toLowerCase().replace(/[\s\u00a0]+/g,' ').replace(/["']/g,'').trim();
-  const H=headers.map(h=>({raw:h,n:norm(h)}));
-  for(const nm of names){const t=norm(nm);let f=H.find(h=>h.n===t);if(f)return f.raw;}
-  for(const nm of names){const t=norm(nm);let f=H.find(h=>h.n.includes(t)||t.includes(h.n));if(f)return f.raw;}
-  return null;
-}
-/* нормализация ключа артикула для соединений */
-const nk=s=>String(s==null?'':s).toLowerCase().replace(/[^0-9a-zа-яё]/gi,'');
-/* «лёгкая» нормализация: регистр + пробелы + кавычки, но ПУНКТУАЦИЯ сохраняется (как точное совпадение в PBI) */
-const lnk=s=>String(s==null?'':s).toLowerCase().replace(/[\s\u00a0\u202f"'`]/g,'');
-
-/* ═══════════ ЗАГРУЗКА ═══════════ */
-const SHEETS=['report','rashod','art','log','sht','acr','post','ekon','report2','log2','sht2','ekon2','ozon'];
-const REQ=['report','rashod','art','log','sht','acr'];
-async function fetchCSVdirect(url){ const r=await fetch(url); if(!r.ok)throw new Error('HTTP '+r.status); return await r.text(); }
-
-/* Забирает CSV-тексты всех листов: через воркер (по паролю) либо по прямым ссылкам (локальная отладка) */
-async function loadRawTexts(diag){
-  const texts={};
-  if(CFG.worker){
-    const base=CFG.worker.replace(/\/+$/,'');
-    let resp;
-    try{ resp=await fetch(base+'?sheet=all',{headers:{'X-Access-Key':CFG.pass||''}}); }
-    catch(e){ throw new Error('Воркер недоступен: '+e.message); }
-    if(resp.status===401) throw new Error('Неверный пароль (401)');
-    if(!resp.ok) throw new Error('Воркер вернул '+resp.status);
-    let j; try{ j=await resp.json(); }catch(e){ throw new Error('Некорректный ответ воркера'); }
-    const data=j.data||{};
-    SHEETS.forEach(k=>{ texts[k]=data[k]||''; });
-    diag.push({name:'Worker',status:'ok',rows:0,msg:'источник: '+base});
-    return texts;
-  }
-  // прямые ссылки (fallback)
-  await Promise.all(SHEETS.filter(k=>CFG[k]).map(async k=>{
-    try{ texts[k]=await fetchCSVdirect(CFG[k]); }catch(e){ texts[k]=''; }
-  }));
-  SHEETS.forEach(k=>{ if(texts[k]===undefined)texts[k]=''; });
-  return texts;
-}
-
-async function buildModel(){
-  const diag=[]; M.diag=diag;
-  if(!CFG.worker && !CFG.report) throw new Error('Не задан ни воркер, ни прямые ссылки (см. Настройки).');
-  const texts=await loadRawTexts(diag);
-  const raw={};
-  SHEETS.forEach(k=>{ let rows=parseCSV(texts[k]||'');
-    if(k==='ozon'){ const hi=rows.findIndex(r=>r.some(c=>/тип начисления|сумма итого/i.test(String(c)))); if(hi>0)rows=rows.slice(hi); }
-    raw[k]=toObjects(rows);
-    const need=REQ.includes(k);
-    diag.push({name:k,status:(raw[k].length?'ok':(need?'err':'warn')),rows:raw[k].length,cols:(raw[k]._headers||[]).length}); });
-  if(!raw.report.length||!raw.rashod.length) throw new Error('Не пришли обязательные листы (report/расход). Проверьте пароль и секреты воркера.');
-
-  /* Артикул dim */
-  const aH=raw.art._headers||[];
-  const c_pred=col(aH,'Предмет'),c_post=col(aH,'Артикул поставщика'),c_glub=col(aH,'Артикул.Глубина','Артикул Глубина'),c_new=col(aH,'Предмет_Новый','Предмет;Новый'),c_scep=col(aH,'Сцепка','Сцепка2');
-  const artDim=[]; const artByPostL=new Map(), artByPostA=new Map(); const artByPredArt=new Map();
-  let predEmpty=0;
-  raw.art.forEach(r=>{
-    let predmet=(r[c_pred]||'').trim(); const post=(r[c_post]||'').trim(),glub=(r[c_glub]||'').trim(),pnew=c_new?(r[c_new]||'').trim():'';
-    const scep=c_scep?(r[c_scep]||'').trim():'';
-    /* если «Предмет» пуст — восстановим из «Сцепка» (Сцепка = Предмет+Артикул поставщика) */
-    if(!predmet&&scep&&post&&scep.length>post.length&&nk(scep).endsWith(nk(post))){
-      // отрезаем хвост-артикул по длине совпадения с нормализованным post
-      let cut=scep.length; const npost=nk(post); let acc='';
-      for(let i=scep.length-1;i>=0;i--){ acc=nk(scep[i])+acc; cut=i; if(acc===npost)break; }
-      predmet=scep.slice(0,cut).trim();
+    if(e_code && e_rs){
+        (raw.ekon || []).forEach(r=>{
+            const k = lnk(r[e_code]);
+            if(k) ekonByCode[k] = num(r[e_rs]);
+        });
     }
-    if(!predmet&&scep&&glub&&nk(scep).endsWith(nk(glub))){ predmet=scep.slice(0,scep.length-glub.length).trim(); }
-    if(!predmet)predEmpty++;
-    const paG=predmet+glub, paP=predmet+post; if(paP===''||paP===';')return;
-    const rec={predmet,post,glub,pnew:pnew||predmet,paG,paP,scep}; artDim.push(rec);
-    if(post){ artByPostL.set(lnk(post),rec); artByPostA.set(nk(post),rec); }
-    artByPredArt.set(nk(predmet)+'|'+nk(post),rec);
-  });
-  M.artByPaG={}; artDim.forEach(a=>{ M.artByPaG[a.paP]=a; M.artByPaG[a.paG]=a; });
-  const smp0=artDim[0]||{};
-  diag.push({name:'Артикул (справочник)',status:predEmpty>artDim.length*0.5?'err':'ok',rows:artDim.length,
-    msg:`Предмет-колонка: ${c_pred||'—'} · пустых предметов: ${predEmpty} · пример: «${smp0.predmet||''}» + «${smp0.glub||''}» → ключ «${smp0.paG||''}»`});
 
-  /* ═══════ Мультикомпанийность: EF (report) · EZFR (report2) · OZON · Консолид ═══════ */
-  /* расход построчно (ОБЩИЙ лист, поартикульно) */
-  const xH=raw.rashod._headers;
-  const x_date=col(xH,'Дата'),x_pa=col(xH,'Предмет;Артикул продавца','Предмет;Артикул.Глубина','Предмет;Артикул поставщика'),
-    x_chto=col(xH,'Что'),x_grp=col(xH,'Что (группа)','Что группа'),x_sum=col(xH,'Сумма');
-  const xRows=raw.rashod.map(r=>{ const s=num(r[x_sum]);
-    const rek=(String(r[x_grp]||'').trim()==='Реклама')?s:0; const post=(String(r[x_chto]||'').trim()==='Пост расходы')?s:0;
-    return {date:pdate(r[x_date]),pa:(r[x_pa]||'').trim(),rek,post,per:s-rek-post}; }).filter(r=>r.date);
+    function cleanCode(art){
+        let a = String(art || '').replace('_XL','_1XL');
+        let b = a.split('_')[0];
+        let c = b.split('0')[0];
 
-  /* Acruals (общий, на EF) */
-  const acH=raw.acr._headers||[];
-  const ac_d=col(acH,'Дата'),ac_pa=col(acH,'Предмет;Артикул.Глубина','Предмет;Артикул продавца'),ac_v=col(acH,'Акруалс');
-  const acGroup=groupBy(raw.acr.map(r=>({date:pdate(r[ac_d]),paG:(r[ac_pa]||'').trim(),acr:intn(r[ac_v])})).filter(r=>r.date),
-    r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,acr:sum(rs,'acr')}));
-
-  function parseSales(rr,taxFlat){
-    if(!rr||!rr.length)return[]; const H=rr._headers;
-    const c_post=col(H,'Артикул поставщика'),c_zakr=col(H,'Сумма заказов минус комиссия WB, руб.','Сумма заказов минус комиссия WB руб'),
-      c_zaks=col(H,'Заказано, шт.','Заказано шт'),c_per=col(H,'К перечислению за товар, руб.','К перечислению за товар руб'),
-      c_vyks=col(H,'Выкупили, шт.','Выкупили шт'),c_den=col(H,'День','Дата');
-    const TAX=new Date(2026,1,1); const out=[];
-    rr.forEach(r=>{ const d=pdate(r[c_den]); if(!d)return; const post=(r[c_post]||'').trim();
-      const rec=artByPostL.get(lnk(post))||artByPostA.get(nk(post)); const paG=rec?rec.paG:('#'+post);
-      const perech=num(r[c_per]); const nalog=taxFlat!=null?Math.round(perech*taxFlat):Math.round(perech*(d>=TAX?0.11:0.07));
-      out.push({date:d,paG,zaks:intn(r[c_zaks]),vyks:intn(r[c_vyks]),zakr:num(r[c_zakr]),vykr:perech,nalog}); });
-    return out;
-  }
-  function parseLog(rr){
-    if(!rr||!rr.length)return[]; const H=rr._headers;
-    const c_end=col(H,'Период конец'),c_art=col(H,'Артикул'),c_pr=col(H,'Предмет'),c_hr=col(H,'Хранение'),c_do=col(H,'Доставка');
-    const rows=rr.map(r=>{ const rec=artByPredArt.get(nk(r[c_pr])+'|'+nk(r[c_art]));
-      return {date:pdate(r[c_end]),paG:rec?rec.paG:('#'+(r[c_pr]||'')+(r[c_art]||'')),hran:num(r[c_hr]),dost:num(r[c_do])}; }).filter(r=>r.date);
-    return groupBy(rows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,hran:sum(rs,'hran'),dost:sum(rs,'dost')}));
-  }
-  function buildPU(xr,shtRaw,keyFn){
-    const sH2=(shtRaw&&shtRaw._headers)||[];
-    const s_pa2=col(sH2,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул продавца','Предмет;Артикул'),s_qty2=col(sH2,'ШТ поставлено','ШТ');
-    const per={},sht={};
-    groupBy(xr,r=>keyFn(r.pa),rs=>({k:keyFn(rs[0].pa),per:sum(rs,'per')})).forEach(g=>{if(g.k)per[g.k]=g.per;});
-    (shtRaw||[]).forEach(r=>{ const k=keyFn(r[s_pa2]); if(k)sht[k]=(sht[k]||0)+intn(r[s_qty2]); });
-    const pu={}; Object.keys(per).forEach(k=>{ if(sht[k])pu[k]=Math.round(per[k]/sht[k]); });
-    artDim.forEach(a=>{ const kP=keyFn(a.paP),kG=keyFn(a.paG); const v=(pu[kP]!==undefined)?pu[kP]:(pu[kG]!==undefined?pu[kG]:undefined); if(v!==undefined){pu[kP]=v;pu[kG]=v;} });
-    return pu;
-  }
-  function buildCo(q2,logGroup,xr,shtRaw){
-    const puL=buildPU(xr,shtRaw,lnk), puA=buildPU(xr,shtRaw,nk);
-    const xGroup=groupBy(xr,r=>keyDP(r.date,r.pa),rs=>({date:rs[0].date,paG:rs[0].pa,post:sum(rs,'post'),rek:sum(rs,'rek')}));
-    const comb=[];
-    xGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,rek:r.rek,post:r.post}));
-    q2.forEach(r=>comb.push({date:r.date,paG:r.paG,zaks:r.zaks,vyks:r.vyks,zakr:r.zakr,vykr:r.vykr,nalog:r.nalog}));
-    logGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,hran:r.hran,dost:r.dost}));
-    return groupBy(comb.filter(r=>r.date),r=>keyDP(r.date,r.paG),rs=>{
-      const paG=rs[0].paG,date=rs[0].date,vyks=sum(rs,'vyks');
-      let pu=puL[lnk(paG)]; if(pu===undefined)pu=puA[nk(paG)];
-      return {paG,y:date.getFullYear(),m:date.getMonth()+1,zaks:sum(rs,'zaks'),vyks,zakr:sum(rs,'zakr'),vykr:sum(rs,'vykr'),
-        rek:sum(rs,'rek'),post:sum(rs,'post'),nalog:sum(rs,'nalog'),hran:sum(rs,'hran'),dost:sum(rs,'dost'),perem:Math.round((pu||0)*vyks)};
-    });
-  }
-
-  const salesEF=parseSales(raw.report,null), salesEZ=parseSales(raw.report2,0.07);
-  const setEF=new Set(salesEF.map(r=>lnk(r.paG))), setEZ=new Set(salesEZ.map(r=>lnk(r.paG)));
-  const xEF=[],xEZ=[];
-  xRows.forEach(r=>{ const k=lnk(r.pa);
-    if(setEZ.has(k)&&!setEF.has(k)){ xEZ.push(Object.assign({},r,{post:0})); } else { xEF.push(r); } });
-  const obEF=buildCo(salesEF,parseLog(raw.log),xEF,raw.sht);
-  acGroup.forEach(r=>obEF.push({paG:r.paG,y:r.date.getFullYear(),m:r.date.getMonth()+1,zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}));
-  const obEZ=buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2);
-  /* ── Ozon: отчёт по начислениям → схема Общего ── */
-  function parseOzon(rr){
-    if(!rr||!rr.length)return[];
-    const H=rr._headers;
-    const c_date=col(H,'Дата начисления'),c_grp=col(H,'Группа услуг'),c_typ=col(H,'Тип начисления'),
-      c_art=col(H,'Артикул'),c_qty=col(H,'Количество'),c_sum=col(H,'Сумма итого, руб.','Сумма итого руб','Сумма итого');
-    if(!c_sum||!c_date)return[];
-    /* экон Расход-ШТ — индексируем по НЕСКОЛЬКИМ формам ключа (общий лист) */
-    const eH=(raw.ekon&&raw.ekon._headers)||[];
-    const e_code=col(eH,'Код латиница','Код  латиница','Латиница'),
-          e_pa=col(eH,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Сцепка'),
-          e_art=col(eH,'Артикул поставщика','Артикул'),
-          e_rs=col(eH,'Расход-ШТ','Расход-Шт','Расход ШТ');
-    const ekonRS={};
-    if(e_rs)(raw.ekon||[]).forEach(r=>{ const rs=num(r[e_rs]);
-      [e_code&&r[e_code],e_pa&&r[e_pa],e_art&&r[e_art]].forEach(k=>{ if(k!=null&&k!==''){const kk=lnk(k); if(kk&&ekonRS[kk]===undefined)ekonRS[kk]=rs;} }); });
-    /* код латиница: до "_", до "0", схлопывание цветов TermSocks (как в PBI) */
-    const cleanCode=art=>{ let a=String(art||'').replace('_XL','_1XL'); let b=a.split('_')[0]; let c=b.split('0')[0];
-      return c.replace(/TermSocks\.Al-ESS\.(black|blue|grey|pink|purp)\./i,'TermSocks.Al-ESS.'); };
-    const rsFor=o=>{ let v=ekonRS[lnk(o.code)]; if(v!==undefined)return v;
-      if(o.paP){ v=ekonRS[lnk(o.paP)]; if(v!==undefined)return v; v=ekonRS[lnk(o.paG)]; if(v!==undefined)return v; }
-      v=ekonRS[lnk(o.base)]; if(v!==undefined)return v; return 0; };
-    const map={};
-    rr.forEach(r=>{ const d=pdate(r[c_date]); if(!d)return;
-      const grp=String(r[c_grp]||'').trim(),typ=String(r[c_typ]||'').trim(),art=String(r[c_art]||'').trim();
-      const qty=num(r[c_qty]),s=num(r[c_sum]); const base=art.split('_')[0]||art;
-      const rec=artByPostL.get(lnk(base))||artByPostA.get(nk(base)); const paG=rec?rec.paG:base;
-      const key=d.getFullYear()+'-'+(d.getMonth()+1)+'|'+paG;
-      const o=map[key]||(map[key]={y:d.getFullYear(),m:d.getMonth()+1,paG,base,code:cleanCode(art),paP:rec?rec.paP:'',rgP:rec?rec.paG:'',prod:0,kom:0,log:0,rek:0,voz:0,qty:0});
-      o.paG2=paG;
-      if(grp==='Продажи')o.prod+=s;
-      else if(grp==='Вознаграждение Ozon')o.kom+=s;
-      else if(grp==='Услуги доставки'||grp==='Услуги партнёров'||grp==='Услуги FBO'||grp==='Другие услуги и штрафы')o.log+=s;
-      else if(grp==='Продвижение и реклама')o.rek+=s;
-      else if(grp==='Возвраты'||grp==='Компенсации и декомпенсации')o.voz+=s;
-      if(typ==='Выручка')o.qty+=qty;
-    });
-    const vals=Object.values(map); let hit=0,tot=0;
-    const out=vals.map(o=>{ o.paG=o.paG; const rs=rsFor(o); tot++; if(rs)hit++;
-      const vykr=Math.round(o.prod+o.kom), dost=Math.round(-(o.log+o.voz)), rek=Math.round(-o.rek),
-            perem=Math.round(rs*o.qty), nalog=Math.round(vykr*0.07);
-      return {paG:o.paG,y:o.y,m:o.m,zaks:o.qty,vyks:o.qty,zakr:vykr,vykr,rek,post:0,nalog,hran:0,dost,perem}; });
-    diag.push({name:'Ozon Расход-ШТ',status:hit?(hit<tot*0.5?'warn':'ok'):'err',rows:hit,
-      msg:`${hit} из ${tot} товаров нашли Расход-ШТ · экон-колонка: ${e_rs||'—'} · код-колонка: ${e_code||e_pa||e_art||'—'}`});
-    if(vals[0])diag.push({name:'  Ozon пример',status:'warn',rows:0,msg:`код «${vals[0].code}» · база «${vals[0].base}» · справочник «${vals[0].paP||'—'}»`});
-    return out;
-  }
-  const obOZ=parseOzon(raw.ozon);
-
-  const acForCo=ac=>ac.map(r=>({y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,acr:r.acr}));
-  const postEF=(raw.post&&raw.post.length)?(function(){const pH=raw.post._headers;const p_s=col(pH,'Сумма'),p_d=col(pH,'Дата');
-    return raw.post.map(r=>{const d=pdate(r[p_d]);return d?{y:d.getFullYear(),m:d.getMonth()+1,summa:intn(r[p_s])}:null;}).filter(Boolean);})():[];
-  M.co={
-    EF:  {ob:obEF, acr:acForCo(acGroup), postR:postEF},
-    EZFR:{ob:obEZ, acr:[],               postR:[]},
-    OZON:{ob:obOZ, acr:[],               postR:[]},
-    CONS:{ob:obEF.concat(obEZ).concat(obOZ), acr:acForCo(acGroup), postR:postEF},
-  };
-  applyCompany();
-  diag.push({name:'Компании',status:'ok',rows:0,msg:`EF: ${obEF.length} строк · EZFR: ${obEZ.length} · Ozon: ${obOZ.length}`});
-  const totPerem=(M.obshiy||[]).reduce((s,r)=>s+r.perem,0);
-  diag.push({name:'Общий (тек. компания)',status:'ok',rows:(M.obshiy||[]).length,msg:`Σ Переменные = ${Math.round(totPerem).toLocaleString('ru-RU')} · годы: ${M.years.join(', ')}`});
-}
-function applyCompany(){
-  const c=(M.co&&M.co[curCo])||(M.co&&M.co.EF); if(!c)return;
-  M.obshiy=c.ob; M.acruals=c.acr; M.postR=c.postR;
-  M.years=[...new Set(c.ob.map(r=>r.y))].filter(y=>y>=2018&&y<=(new Date().getFullYear()+1)).sort((a,b)=>b-a);
-  M.loaded=true;
-}
-function keyDP(d,pa){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()+'|'+pa;}
-function sum(a,f){let s=0;for(const x of a){const v=x[f];if(typeof v==='number')s+=v;}return s;}
-function groupBy(arr,kf,af){const m=new Map();for(const x of arr){const k=kf(x);if(!m.has(k))m.set(k,[]);m.get(k).push(x);}const o=[];for(const rs of m.values())o.push(af(rs));return o;}
-
-/* ═══════════ ДВИЖОК МЕР ═══════════ */
-const DIV=(a,b)=>b?a/b:0;
-const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
-function agg(y,mset,filt){ const a={zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0};
-  for(const r of M.obshiy){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
-    a.zaks+=r.zaks;a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem; }
-  return a; }
-function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
-function postRv(y,mArr,filt){ const a=agg(y,new Set(mArr),filt); if(a.post!==0)return a.post;
-  if(mArr.length===1){const pm=prevMonth(y,mArr[0]);return agg(pm.y,new Set([pm.m]),filt).post;} return a.post; }
-/* правило рекламы применимо к месяцу: с апреля 2026 И только к ЗАВЕРШЁННОМУ месяцу */
-function ruleApplies(y,m){
-  const now=new Date(),nowY=now.getFullYear(),nowM=now.getMonth()+1;
-  const fromApr=(y>2026)||(y===2026&&m>=4);
-  const completed=(y<nowY)||(y===nowY&&m<nowM);
-  return fromApr&&completed;
-}
-function meas(y,mArr,filt){
-  const isAgg=(filt==null)||filt.agg===true;                 // правило рекламы — только на агрегате (весь месяц), не внутри предмета/артикула
-  const mset=new Set(mArr); const a=agg(y,mset,filt); const acr=acrSum(y,mset,filt); const pR=postRv(y,mArr,filt);
-  let rek=a.rek, rekEst=false;
-  if(isAgg && curCo!=='EZFR' && curCo!=='OZON'){   // правило 300к — только WB-кабинет EF (и Консолид), не EZFR/Ozon
-    rek=0;
-    for(const m of mArr){ let r=agg(y,new Set([m]),filt).rek;
-      if(ruleApplies(y,m)&&r<30000){ r=300000; if(mArr.length===1)rekEst=true; }
-      rek+=r; }
-  }
-  const pribOper=a.vykr-a.perem-a.dost-a.hran-a.nalog;
-  const postAkr=pR+acr;
-  const pribFact=a.vykr-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr;
-  return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr:a.vykr,cena:DIV(a.vykr,a.vyks),
-    perem:a.perem,dost:a.dost,drl:DIV(a.dost,a.vykr),hran:a.hran,nalog:a.nalog,
-    pribOper,pribOperP:DIV(pribOper,a.vykr),postAkr,rek,rekEst,drr:DIV(rek,a.zakr),
-    pribFact,pribFactP:DIV(pribFact,a.vykr),
-    advCPO:DIV(rek,a.zaks),advCPS:DIV(rek,a.vyks),drrSa:DIV(rek,a.vykr),
-    logCPS:DIV(a.dost,a.vyks),stockCPS:DIV(a.hran,a.vyks),dostP:DIV(a.dost,a.vykr),hranP:DIV(a.hran,a.vykr),
-    srchek:DIV(a.zakr,a.zaks),acr};
-}
-function predmetOf(paG){const a=M.artByPaG[paG];return a?a.pnew:'(без предмета)';}
-
-/* ═══════════ ФОРМАТ ═══════════ */
-const fi=n=>(n==null||isNaN(n))?'—':Math.round(n).toLocaleString('ru-RU');
-const fp=n=>(n==null||isNaN(n))?'—':Math.round(n*100)+'%';
-const fp1=n=>(n==null||isNaN(n))?'—':(n*100).toFixed(1).replace('.',',')+'%';
-const f2=n=>(n==null||isNaN(n))?'—':n.toFixed(2).replace('.',',');
-
-/* ═══════════ КОЛОНКИ ТАБЛИЦЫ ═══════════ */
-const COLS=[
-  {k:'zaks',l:'Заказ,шт',f:fi,t:'Заказано штук (лист report / «2»)'},
-  {k:'vyks',l:'Выкуп,шт',f:fi,t:'Выкуплено штук (report / «2»)'},
-  {k:'vkp',l:'Вкп%',f:fp,t:'Выкуп ÷ Заказ (в штуках)'},
-  {k:'zakr',l:'Заказ,руб',f:fi,t:'Сумма заказов минус комиссия WB, руб.'},
-  {k:'vykr',l:'Выкуп,руб',f:fi,bar:'bl',t:'К перечислению за товар, руб. (выручка)'},
-  {k:'cena',l:'Ср.Чек',f:fi,t:'Цена = Выкуп,руб ÷ Выкуп,шт'},
-  {k:'perem',l:'Перемен',f:fi,t:'Перемен на штуку (Σпеременных ÷ ШТ поставлено) × Выкуп,шт'},
-  {k:'dost',l:'Дставка',f:fi,t:'Доставка (лист Лог+Хран)'},
-  {k:'drl',l:'ДРЛ%',f:fp,t:'Доля логистики = Доставка ÷ Выкуп,руб'},
-  {k:'hran',l:'Хранен',f:fi,t:'Хранение (лист Лог+Хран)'},
-  {k:'nalog',l:'Налог',f:fi,t:'Налог: 7% до 01.02.2026, далее 11% от К перечислению'},
-  {k:'pribOper',l:'Пр.Опер',f:fi,t:'Операционная прибыль = Выкуп,руб − Переменные − Доставка − Хранение − Налог'},
-  {k:'pribOperP',l:'Оп%',f:fp,hl:1,t:'Прибыль.Опер ÷ Выкуп,руб'},
-  {k:'postAkr',l:'Пост+акр',f:fi,t:'Постоянные (с откатом на пр. месяц, если 0) + Акруалс'},
-  {k:'rek',l:'Реклама',f:fi,t:'Расходы на рекламу (при включённом правиле <30к → 300к)'},
-  {k:'drr',l:'ДРР%',f:fp1,t:'Доля рекламы = Реклама ÷ Заказ,руб'},
-  {k:'pribFact',l:'Пр.Факт(асс)',f:fi,bar:'pf',t:'Факт с акруалс = Пр.Опер − Пост.Р − Реклама − Акруалс'},
-  {k:'pribFactP',l:'Ф%',f:fp,hl:1,t:'Прибыль.Факт(асс.) ÷ Выкуп,руб'}
-];
-
-/* ═══════════ РЕНДЕР P&L ═══════════ */
-let _t; function debouncedRender(){clearTimeout(_t);_t=setTimeout(render,250);}
-function setGrp(g){grpMode=g;document.querySelectorAll('#grp button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));render();}
-function togglePY(){pyOn=!pyOn;document.getElementById('pyBtn').classList.toggle('act',pyOn);document.getElementById('pyBtn').textContent=pyOn?'✓ прошлый год':'＋ прошлый год';render();}
-
-function render(){
-  if(!M.loaded)return;
-  if(curTab!=='pl'){renderTab();return;}
-  const y=+document.getElementById('fYear').value;
-  const mSel=document.getElementById('fMonth').value;
-  const q=document.getElementById('fSearch').value.trim().toLowerCase();
-  const slicerMonths=mSel?[+mSel]:[1,2,3,4,5,6,7,8,9,10,11,12];
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
-
-  /* строки в зависимости от среза */
-  let rows=[];
-  if(grpMode==='month'){
-    rows=slicerMonths.map(m=>({label:MONTHS[m-1],v:meas(y,[m],searchOK),py:pyOn?meas(y-1,[m],searchOK):null}));
-  } else {
-    const dimOf = grpMode==='predmet'? (r=>predmetOf(r.paG)) : (r=>r.paG);
-    const acc={},ord={}; const mset=new Set(slicerMonths);
-    for(const r of M.obshiy){ if(r.y!==y||!mset.has(r.m)||!searchOK(r))continue; const d=dimOf(r); acc[d]=(acc[d]||0)+r.vykr; ord[d]=(ord[d]||0)+r.zaks; }
-    let dims=Object.keys(acc).sort((a,b)=>acc[b]-acc[a]);
-    if(grpMode==='artikul'){
-      /* артикулы с ≥100 заказов — отдельно, остальное → «Прочее» */
-      const big=dims.filter(d=>ord[d]>=100), small=dims.filter(d=>ord[d]<100);
-      rows=big.map(D=>({label:D,v:meas(y,slicerMonths,r=>r.paG===D&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>r.paG===D&&searchOK(r)):null}));
-      if(small.length){ const sset=new Set(small);
-        rows.push({label:`Прочее (${small.length} арт. <100 заказов)`,v:meas(y,slicerMonths,r=>sset.has(r.paG)&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>sset.has(r.paG)&&searchOK(r)):null}); }
-    } else {
-      rows=dims.map(D=>({label:D,v:meas(y,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)):null}));
+        return c.replace(
+            /TermSocks\.Al-ESS\.(black|blue|grey|pink|purp)\./i,
+            'TermSocks.Al-ESS.'
+        );
     }
-  }
-  const tot={label:'Всего',v:meas(y,slicerMonths,searchOK),py:pyOn?meas(y-1,slicerMonths,searchOK):null};
 
-  /* max для баров */
-  const mx={};COLS.filter(c=>c.bar).forEach(c=>mx[c.k]=Math.max(1,...rows.map(r=>Math.abs(r.v[c.k]))));
+    const map = {};
 
-  /* header */
-  const firstCol = grpMode==='month'?'Месяц':grpMode==='predmet'?'Предмет':'Артикул';
-  let h='<thead><tr><th>'+firstCol+'</th>';
-  COLS.forEach(c=>{ h+=`<th class="${c.hl?'hl':''}" title="${c.t||c.l}">${c.l}</th>`; if(pyOn)h+=`<th class="py" title="${c.l} за прошлый год">${c.l} ᴾʸ</th>`; });
-  h+='</tr></thead><tbody>';
+    rr.forEach(r=>{
 
-  const cell=(c,v,isPY)=>{
-    const val=v[c.k]; let inner=c.f(val);
-    let cls=(c.hl?'hl ':'')+(isPY?'py ':'');
-    if(c.k==='pribFact'&&!isPY)cls+=val>0?'pos ':val<0?'neg ':'';
-    if(c.k==='rek'&&!isPY&&v.rekEst)cls+='est ';           // серая пометка оценки рекламы
-    let bar='';
-    if(c.bar&&!isPY){ const w=Math.abs(val)/mx[c.k]*100; const col=c.bar==='bl'?'bl':(val>=0?'g':'r'); bar=`<span class="bar ${col}" style="width:${w}%"></span>`; }
-    const tip=(c.k==='rek'&&v.rekEst)?' title="оценка: факт < 30 000 → подставлено 300 000"':'';
-    return `<td class="${cls.trim()}"${tip}>${bar}<span class="v">${inner}</span></td>`;
-  };
-  const rowHtml=(r,isTot)=>{
-    const empty=!isTot&&r.v.vyks===0&&r.v.zaks===0&&r.v.vykr===0;
-    let s=`<tr class="${isTot?'total':''} ${empty?'empty':''}"><td title="${r.label}">${r.label}</td>`;
-    COLS.forEach(c=>{ s+=cell(c,r.v,false); if(pyOn)s+=cell(c,r.py,true); });
-    return s+'</tr>';
-  };
-  rows.forEach(r=>h+=rowHtml(r,false)); h+=rowHtml(tot,true); h+='</tbody>';
-  document.getElementById('matrix').innerHTML=h;
+        const d = pdate(r[c_date]);
+        if(!d) return;
 
-  /* KPI — сравнение YTD (янв → последний полный месяц) */
-  const nowY=new Date().getFullYear(),nowM=new Date().getMonth()+1;
-  const lastFull = (y===nowY)? Math.max(1,nowM-1) : 12;         // последний завершённый месяц
-  const ytdMonths=[];for(let m=1;m<=lastFull;m++)ytdMonths.push(m);
-  const curYTD=meas(y,ytdMonths,searchOK).pribFact, prvYTD=meas(y-1,ytdMonths,searchOK).pribFact;
-  const yoy2= prvYTD? (curYTD-prvYTD)/Math.abs(prvYTD):null;
-  const perLabel = `к ${y-1} (янв–${MONTHS[lastFull-1].slice(0,3).toLowerCase()})`;
-  const kpi=[
-    {l:'Выручка (Выкуп,руб)',v:fi(tot.v.vykr)},
-    {l:'Прибыль.Факт (асс.)',v:fi(tot.v.pribFact),c:tot.v.pribFact>=0?'g':'r',d:yoy2!=null?`<span class="${yoy2>=0?'du':'dd'}">${yoy2>=0?'▲':'▼'} ${fp1(Math.abs(yoy2))}</span> ${perLabel}`:''},
-    {l:'Рентабельность (асс.)',v:fp(tot.v.pribFactP),c:tot.v.pribFactP>=0?'g':'r'},
-    {l:'Выкуп %',v:fp(tot.v.vkp)}
-  ];
-  document.getElementById('kpi').innerHTML=kpi.map(k=>`<div class="mc"><div class="ml">${k.l}</div><div class="mv ${k.c||''}">${k.v}</div>${k.d?`<div class="md">${k.d}</div>`:''}</div>`).join('');
-  document.getElementById('matrixTtl').textContent = grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам (заказы ≥100, остальное → Прочее)';
-  document.getElementById('matrixSub').textContent=`год ${y}${mSel?' · '+MONTHS[+mSel-1]:''}${q?' · '+q:''}`;
-  document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
-}
+        const grp = String(r[c_grp] || '').trim();
+        const typ = String(r[c_typ] || '').trim();
 
-/* ═══════════ ВКЛАДКИ ═══════════ */
-function switchCo(c){
-  curCo=c; applyCompany();
-  const yl=document.getElementById('fYear'); const cur=yl.value;
-  yl.innerHTML=M.years.map(y=>`<option>${y}</option>`).join('');
-  if(M.years.includes(+cur))yl.value=cur;
-  const arts=[...new Set(M.obshiy.filter(r=>r.vyks>0||r.zaks>0).map(r=>r.paG))].filter(Boolean).sort();
-  document.getElementById('artList').innerHTML=arts.slice(0,1000).map(a=>`<option value="${String(a).replace(/"/g,'&quot;')}">`).join('');
-  if(curTab==='pl')render(); else renderTab();
-}
-function tab(p){ curTab=p; document.querySelectorAll('#tabs .tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
-  ['pl','profit','adv','log','fix','check','insights'].forEach(x=>document.getElementById('page-'+x).style.display=x===p?'block':'none');
-  document.getElementById('grpWrap').style.display=p==='pl'?'flex':'none';
-  document.getElementById('pyWrap').style.display=p==='pl'?'flex':'none';
-  if(M.loaded){ if(p==='pl')render(); else renderTab(); }
-}
-function monthTable(cols,y,q,months){
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
-  const rowM = months||[1,2,3,4,5,6,7,8,9,10,11,12]; const allM=[1,2,3,4,5,6,7,8,9,10,11,12];
-  let h='<thead><tr><th>Месяц</th>'+cols.map(c=>`<th title="${c.t||c.l}">${c.l}</th>`).join('')+'</tr></thead><tbody>';
-  rowM.forEach(m=>{ h+=`<tr><td>${MONTHS[m-1]}</td>`+cols.map(c=>`<td>${c.fn([m],searchOK)}</td>`).join('')+'</tr>'; });
-  h+=`<tr class="total"><td>${months&&months.length<12?'Итог':'Всего'}</td>`+cols.map(c=>`<td>${c.fn(rowM,searchOK)}</td>`).join('')+'</tr></tbody>';
-  return h;
-}
-/* разрез по предметам / артикулам (артикулы <100 заказов → «Прочее») */
-function breakdownTable(cols,y,q,dim,months){
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
-  const mset=new Set(months||[1,2,3,4,5,6,7,8,9,10,11,12]);
-  const acc={},ord={};
-  for(const r of M.obshiy){ if(r.y!==y||!mset.has(r.m)||!searchOK(r))continue; const d=dim==='predmet'?predmetOf(r.paG):r.paG; acc[d]=(acc[d]||0)+r.vykr; ord[d]=(ord[d]||0)+r.zaks; }
-  let dims=Object.keys(acc).sort((a,b)=>acc[b]-acc[a]); let rows;
-  const mArr=[...mset];
-  if(dim==='artikul'){ const big=dims.filter(d=>ord[d]>=100),small=dims.filter(d=>ord[d]<100);
-    rows=big.map(D=>({label:D,filt:r=>r.paG===D&&searchOK(r)}));
-    if(small.length){const sset=new Set(small);rows.push({label:`Прочее (${small.length} арт. <100)`,filt:r=>sset.has(r.paG)&&searchOK(r)});}
-  } else { rows=dims.map(D=>({label:D,filt:r=>predmetOf(r.paG)===D&&searchOK(r)})); }
-  cols=cols.filter(c=>!c.noBreak);                    // Fix.CPO и подобное — только помесячно, не в разрезах
-  const head=dim==='predmet'?'Предмет':'Артикул';
-  let h=`<thead><tr><th>${head}</th>`+cols.map(c=>`<th title="${c.t||c.l}">${c.l}</th>`).join('')+'</tr></thead><tbody>';
-  rows.forEach(r=>{ h+=`<tr><td title="${r.label}">${r.label}</td>`+cols.map(c=>`<td>${c.fn(mArr,r.filt)}</td>`).join('')+'</tr>'; });
-  h+=`<tr class="total"><td>Всего</td>`+cols.map(c=>`<td>${c.fn(mArr,searchOK)}</td>`).join('')+'</tr></tbody>';
-  return h;
-}
-function section(ttl,sub,tableHtml){return `<div class="sec"><div class="sh"><div class="st">${ttl}</div><div class="sm2">${sub||''}</div></div><div class="sw"><table>${tableHtml}</table></div></div>`;}
-function tabTables(el,chart,title,sub,cols,y,q,months){
-  const per = months&&months.length<12? ' · '+MONTHS[months[0]-1] : '';
-  el.innerHTML=chart
-    +section(`${title} по месяцам · ${y}`,sub,monthTable(cols,y,q,months))
-    +section(`${title} по предметам · ${y}${per}`,'',breakdownTable(cols,y,q,'predmet',months))
-    +section(`${title} по артикулам · ${y}${per}`,'артикулы <100 заказов → «Прочее»',breakdownTable(cols,y,q,'artikul',months));
-}
-const kf=v=>!v?'':(Math.abs(v)>=1000?Math.round(v/1000)+'к':Math.round(v));
-/* пропорциональный график: столбцы (левая шкала) + линия (правая шкала), подписи над столбцами и точками */
-function chartBL(labels,bars,line,o){
-  o=o||{}; const W=920,H=225,pL=6,pR=6,pT=26,pB=22,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
-  const maxB=Math.max(1,...bars.map(v=>Math.abs(v)||0));
-  const lv=line.filter(v=>isFinite(v)&&v>0); const maxL=Math.max(1,...lv);
-  const bx=i=>pL+bw*i+bw*0.28,bwid=bw*0.44,by=v=>pT+ih-(Math.max(0,v)/maxB*ih);
-  const lx=i=>pL+bw*i+bw*0.5,ly=v=>pT+ih-(v/maxL*ih);
-  const bc=o.barColor||'var(--blue)',lc=o.lineColor||'var(--amber)',lf=o.lineFmt||(v=>Math.round(v)),bf=o.barFmt;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
-  for(let g=1;g<=3;g++){const yy=(pT+ih-ih*g/4).toFixed(1);s+=`<line x1="${pL}" y1="${yy}" x2="${W-pR}" y2="${yy}" stroke="var(--border)" stroke-width="1"/>`;}
-  bars.forEach((v,i)=>{const h=Math.max(0,v)/maxB*ih;s+=`<rect x="${bx(i).toFixed(1)}" y="${by(v).toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${bc}" opacity="0.5"/>`;
-    if(bf&&v)s+=`<text x="${lx(i).toFixed(1)}" y="${(by(v)-4).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--ink3)" font-weight="700">${bf(v)}</text>`;});
-  const seg=[];line.forEach((v,i)=>{if(isFinite(v)&&v>0)seg.push(`${lx(i).toFixed(1)},${ly(v).toFixed(1)}`);});
-  if(seg.length>1)s+=`<polyline points="${seg.join(' ')}" fill="none" stroke="${lc}" stroke-width="2.5"/>`;
-  line.forEach((v,i)=>{if(isFinite(v)&&v>0){s+=`<circle cx="${lx(i).toFixed(1)}" cy="${ly(v).toFixed(1)}" r="3" fill="${lc}"/>`;
-    s+=`<text x="${lx(i).toFixed(1)}" y="${(ly(v)-7).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink2)" font-weight="700">${lf(v)}</text>`;}});
-  labels.forEach((L,i)=>{s+=`<text x="${lx(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9.5" fill="var(--ink3)">${L}</text>`;});
-  return s+'</svg>';
-}
-function chartCard(title,legend,svg){return `<div class="chartbox" style="margin-bottom:14px"><div class="chartttl">${title}</div><div class="leg">${legend}</div><div class="svgbox">${svg}</div></div>`;}
-const legItem=(c,txt,op)=>`<span><i style="background:${c};${op?'opacity:'+op:''}"></i>${txt}</span>`;
-const mns3=MONTHS.map(x=>x.slice(0,3));
-function renderTab(){
-  const y=+document.getElementById('fYear').value;
-  const q=document.getElementById('fSearch').value.trim().toLowerCase();
-  const mSel=document.getElementById('fMonth').value;
-  const el=document.getElementById('page-'+curTab);
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
-  const all=[1,2,3,4,5,6,7,8,9,10,11,12];
-  const sM = mSel?[+mSel]:all;                       // выбранные месяцы (чувствительность к фильтру)
-  const base=[
-    {l:'Заказ,шт',t:'Заказано штук',fn:(m,f)=>fi(meas(y,m,f).zaks)},
-    {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
-    {l:'Вкп%',t:'Выкуп,шт ÷ Заказ,шт',fn:(m,f)=>fp(meas(y,m,f).vkp)},
-  ];
-  if(curTab==='adv'){
-    const rekM=all.map(m=>meas(y,[m],searchOK).rek), drrM=all.map(m=>meas(y,[m],searchOK).drr);
-    const chart=chartCard(`Реклама и ДРР.Or% по месяцам · ${y}`,
-      legItem('var(--amber)','Реклама, ₽',.7)+legItem('var(--blue)','ДРР.Or%'),
-      chartBL(mns3,rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf}));
-    const cols=[
-      {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
-      {l:'Выкуп,руб',t:'Выручка (К перечислению за товар)',fn:(m,f)=>fi(meas(y,m,f).vykr)},
-      {l:'Реклама',t:'Расходы на рекламу (лист расход, группа «Реклама»). Для завершённых месяцев c апр.2026: если <30 000 ₽ → 300 000 ₽ (оценка)',fn:(m,f)=>fi(meas(y,m,f).rek)},
-      {l:'ДРР.Sa%',t:'Реклама ÷ Выкуп,руб (ДРР от продаж)',fn:(m,f)=>fp1(meas(y,m,f).drrSa)},
-      {l:'ДРР.Or%',t:'Реклама ÷ Заказ,руб (ДРР от заказов)',fn:(m,f)=>fp1(meas(y,m,f).drr)},
-      {l:'Adv.CPO',t:'Реклама ÷ Заказ,шт (стоимость на заказ)',fn:(m,f)=>fi(meas(y,m,f).advCPO)},
-      {l:'Adv.CPS',t:'Реклама ÷ Выкуп,шт (стоимость на продажу)',fn:(m,f)=>fi(meas(y,m,f).advCPS)},
-    ];
-    tabTables(el,chart,'Реклама','ДРР.Order — от заказов · ДРР.Sale — от выкупов',cols,y,q,sM);
-  } else if(curTab==='log'){
-    const dostM=all.map(m=>meas(y,[m],searchOK).dost), cpsM=all.map(m=>meas(y,[m],searchOK).logCPS);
-    const chart=chartCard(`Доставка и Log.CPS по месяцам · ${y}`,
-      legItem('var(--blue)','Доставка, ₽',.6)+legItem('var(--amber)','Log.CPS (на выкуп)'),
-      chartBL(mns3,dostM,cpsM,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf}));
-    const cols=base.concat([
-      {l:'Доставка',t:'Доставка (лист Лог+Хран)',fn:(m,f)=>fi(meas(y,m,f).dost)},
-      {l:'Хранение',t:'Хранение (лист Лог+Хран)',fn:(m,f)=>fi(meas(y,m,f).hran)},
-      {l:'Дост%',t:'Доставка ÷ Выкуп,руб',fn:(m,f)=>fp1(meas(y,m,f).dostP)},
-      {l:'Хран%',t:'Хранение ÷ Выкуп,руб',fn:(m,f)=>fp1(meas(y,m,f).hranP)},
-      {l:'Log.CPS',t:'Доставка ÷ Выкуп,шт',fn:(m,f)=>fi(meas(y,m,f).logCPS)},
-      {l:'Stock.CPS',t:'Хранение ÷ Выкуп,шт',fn:(m,f)=>f2(meas(y,m,f).stockCPS)},
-    ]);
-    tabTables(el,chart,'Логистика','CPS — стоимость на 1 выкуп',cols,y,q,sM);
-  } else if(curTab==='fix'){
-    const hasPost=M.postR.length>0;
-    const postSum=(mArr)=>{const ms=new Set(mArr);return M.postR.filter(r=>r.y===y&&ms.has(r.m)).reduce((s,r)=>s+r.summa,0);};
-    const postM=all.map(m=>meas(y,[m],searchOK).postAkr);
-    const chart=chartCard(`Пост.Р(+акр) по месяцам · ${y}`,legItem('#5B3FA0','Пост.Р(+акр), ₽',.6),
-      chartBL(mns3,postM,all.map(_=>NaN),{barColor:'#5B3FA0',barFmt:kf}));
-    const cols=base.concat([
-      {l:'Постоянные',t:'Постоянные расходы (лист расход, «Пост расходы») с откатом на пр. месяц если 0',fn:(m,f)=>fi(meas(y,m,f).postAkr-meas(y,m,f).acr)},
-      {l:'Акруалс',t:'Акруалс (отдельный лист Acruals)',fn:(m,f)=>fi(meas(y,m,f).acr)},
-      {l:'Пост.Р(+акр)',t:'Постоянные + Акруалс',fn:(m,f)=>fi(meas(y,m,f).postAkr)},
-      {l:'Fix.CPO',noBreak:1,t:'Постоянные всего ÷ Заказ,шт всего — осмысленно только на уровне «Всего», не по артикулам',fn:(m,f)=>{const M0=meas(y,m,f);const ps=hasPost?postSum(m):(M0.postAkr-M0.acr);return fi(DIV(ps,M0.zaks));}},
-    ]);
-    tabTables(el,chart,'Постоянные расходы',hasPost?'Fix.CPO из «ПОСТ затраты архив»':'Fix.CPO — добавьте лист «ПОСТ затраты архив»',cols,y,q,sM);
-  } else if(curTab==='check'){
-    const bars=all.map(m=>meas(y,[m],searchOK).zaks);
-    const line=all.map(m=>meas(y,[m],searchOK).srchek);
-    const chart=chartCard(`Заказ,шт и Ср.Чек по месяцам · ${y}`,
-      legItem('var(--blue)','Заказ,шт',.5)+legItem('var(--amber)','Ср.Чек Заказа'),
-      chartBL(mns3,bars,line,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf}));
-    const cols=[
-      {l:'Заказ,шт',t:'Заказано штук',fn:(m,f)=>fi(meas(y,m,f).zaks)},
-      {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
-      {l:'Вкп%',t:'Выкуп,шт ÷ Заказ,шт',fn:(m,f)=>fp(meas(y,m,f).vkp)},
-      {l:'Ср.Чек Заказа',t:'Заказ,руб ÷ Заказ,шт',fn:(m,f)=>fi(meas(y,m,f).srchek)},
-      {l:'Цена (Выкуп)',t:'Выкуп,руб ÷ Выкуп,шт',fn:(m,f)=>fi(meas(y,m,f).cena)},
-      {l:'Ср.Чек PY',t:'Ср.Чек Заказа прошлого года',fn:(m,f)=>fi(meas(y-1,m,f).srchek)},
-    ];
-    tabTables(el,chart,'Средний чек','Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт',cols,y,q,sM);
-  } else if(curTab==='profit'){
-    renderProfit(el,y,q);
-  } else if(curTab==='insights'){
-    renderInsights(el,y,q);
-  }
-}
-function renderProfit(el,y,q){
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
-  const all=[1,2,3,4,5,6,7,8,9,10,11,12];
-  const nowY=new Date().getFullYear(),curMonth=(y===nowY)?Math.max(1,new Date().getMonth()):12; // последний полный месяц
-  const ytd=all.filter(m=>m<=curMonth);
-  const byYear=M.years.slice().sort((a,b)=>a-b).map(yy=>({y:yy,v:meas(yy,all,searchOK).pribFact}));
-  const maxY=Math.max(1,...byYear.map(x=>Math.abs(x.v)));
-  const yearBars=byYear.map(x=>`<div class="barrow"><div class="lbl">${x.y}</div><div class="track"><div class="fill ${x.v<0?'neg':''}" style="width:${Math.abs(x.v)/maxY*100}%"></div></div><div class="num">${fi(x.v)}</div></div>`).join('');
-  const byYtd=M.years.slice().sort((a,b)=>a-b).map(yy=>({y:yy,v:meas(yy,ytd,searchOK).pribFact}));
-  const maxYt=Math.max(1,...byYtd.map(x=>Math.abs(x.v)));
-  const ytdBars=byYtd.map(x=>`<div class="barrow"><div class="lbl">${x.y} (янв–${MONTHS[curMonth-1].slice(0,3).toLowerCase()})</div><div class="track"><div class="fill ${x.v<0?'neg':''}" style="width:${Math.abs(x.v)/maxYt*100}%"></div></div><div class="num">${fi(x.v)}</div></div>`).join('');
-  /* помесячно текущий vs PY — узкий SVG с подписями в млн */
-  const cur=all.map(m=>meas(y,[m],searchOK).pribFact), prv=all.map(m=>meas(y-1,[m],searchOK).pribFact);
-  const mom=chartGrouped(mns3,cur,prv,v=>v?(v/1e6).toFixed(1).replace('.',','):'');
-  el.innerHTML=`
-    <div class="chartgrid">
-      <div class="chartbox"><div class="chartttl">Прибыль.Факт по годам</div><div style="max-width:460px">${yearBars}</div></div>
-      <div class="chartbox"><div class="chartttl">Прибыль YTD (янв → ${MONTHS[curMonth-1].toLowerCase()})</div><div style="max-width:460px">${ytdBars}</div></div>
-    </div>
-    <div class="chartbox"><div class="chartttl">Помесячно, млн ₽: ${y} vs ${y-1}</div>
-      <div class="leg">${legItem('var(--green)',y,'')+legItem('#B7D9C4',y-1,'')}</div>
-      <div style="max-width:760px">${mom}</div></div>`;
-}
-/* сгруппированные столбцы: две серии рядом в слоте, с нулевой осью и подписями */
-function chartGrouped(labels,s1,s2,fmt){
-  const W=760,H=190,pL=8,pR=8,pT=22,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
-  const vals=s1.concat(s2).map(v=>v||0);
-  const maxV=Math.max(0,...vals),minV=Math.min(0,...vals),range=(maxV-minV)||1;
-  const zy=pT+ih*(maxV/range);
-  const hOf=v=>Math.abs(v)/range*ih;
-  const bwid=bw*0.30,gap=bw*0.08;
-  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
-  s+=`<line x1="${pL}" y1="${zy.toFixed(1)}" x2="${W-pR}" y2="${zy.toFixed(1)}" stroke="var(--border2)" stroke-width="1"/>`;
-  labels.forEach((L,i)=>{ const cx=pL+bw*i+bw/2;
-    [[s1[i],'var(--green)','var(--red)',-1],[s2[i],'#B7D9C4','#E3AFAF',1]].forEach(([v,colPos,colNeg,side])=>{
-      const val=v||0,h=hOf(val),x=side<0?cx-bwid-gap/2:cx+gap/2,yy=val>=0?zy-h:zy,col=val<0?colNeg:colPos;
-      s+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${col}"/>`;
-      if(val)s+=`<text x="${(x+bwid/2).toFixed(1)}" y="${(val>=0?yy-3:zy+h+9).toFixed(1)}" text-anchor="middle" font-size="8" fill="${val<0?'var(--red)':'var(--ink3)'}" font-weight="700">${fmt(val)}</text>`;
+        const art = String(r[c_art] || '').trim();
+
+        const qty = Math.abs(num(r[c_qty]));
+        const s   = num(r[c_sum]);
+
+        const base = art.split('_')[0] || art;
+
+        const rec =
+            artByPostL.get(lnk(base)) ||
+            artByPostA.get(nk(base));
+
+        const paG = rec ? rec.paG : base;
+
+        const key =
+            d.getFullYear() + '-' +
+            (d.getMonth()+1) +
+            '|' + paG;
+
+        const o = map[key] || (map[key] = {
+
+            y:d.getFullYear(),
+            m:d.getMonth()+1,
+
+            paG,
+
+            code:cleanCode(art),
+
+            salesQty:0,
+            orderQty:0,
+
+            salesRub:0,
+            bonusRub:0,
+            returnRub:0,
+            partnerRub:0,
+
+            log:0,
+            rek:0,
+            voz:0
+
+        });
+
+        // ---------- ШТУКИ ----------
+
+        if(typ === 'Выручка')
+            o.salesQty += qty;
+
+        if(typ === 'Логистика')
+            o.orderQty += qty;
+
+        // ---------- РУБЛИ ----------
+
+        if(typ === 'Выручка')
+            o.salesRub += s;
+
+        if(typ === 'Баллы за скидки')
+            o.bonusRub += s;
+
+        if(typ === 'Возврат выручки')
+            o.returnRub += s;
+
+        if(typ === 'Программы партнёров')
+            o.partnerRub += s;
+
+        // ---------- Остальные расходы ----------
+
+        if(grp === 'Вознаграждение Ozon')
+            o.kom = (o.kom || 0) + s;
+
+        else if(
+            grp === 'Услуги доставки' ||
+            grp === 'Услуги партнёров' ||
+            grp === 'Услуги FBO' ||
+            grp === 'Другие услуги и штрафы'
+        )
+            o.log += s;
+
+        else if(grp === 'Продвижение и реклама')
+            o.rek += s;
+
+        else if(
+            grp === 'Возвраты' ||
+            grp === 'Компенсации и декомпенсации'
+        )
+            o.voz += s;
+
     });
-    s+=`<text x="${cx.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--ink3)">${L}</text>`;
-  });
-  return s+'</svg>';
-}
+        return Object.values(map).map(o=>{
 
-/* ═══════════ ИНСАЙТЫ (шаблонный пересказ цифр, без ИИ) ═══════════ */
-function renderInsights(el,y,q){
-  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
-  const now=new Date(),nowY=now.getFullYear(),nowM=now.getMonth()+1;
-  const lastM=(y<nowY)?12:(nowM-1);
-  if(lastM<1){ el.innerHTML='<div class="scaffold">Для '+y+' ещё нет завершённых месяцев для анализа.</div>'; return; }
-  const mName=MONTHS[lastM-1];
-  const A=meas(y,[lastM],searchOK);
-  const pm=lastM>1?{yy:y,mm:lastM-1}:{yy:y-1,mm:12};
-  const P=meas(pm.yy,[pm.mm],searchOK), Yq=meas(y-1,[lastM],searchOK);
-  const ytdM=[];for(let i=1;i<=lastM;i++)ytdM.push(i);
-  const YT=meas(y,ytdM,searchOK), YTp=meas(y-1,ytdM,searchOK);
-  const pc=(c,p)=>{ if(p==null||!isFinite(p)||p===0)return null; return (c-p)/Math.abs(p); };
-  const ar=(c,p)=>{ const d=pc(c,p); if(d==null)return '<span style="color:var(--ink3)">н/д</span>'; return `<span class="${d>=0?'pos':'neg'}">${d>=0?'▲ +':'▼ '}${(d*100).toFixed(0)}%</span>`; };
-  const pp=(c,p)=>{ const d=(c-p)*100; return `<span class="${d>=0?'pos':'neg'}">${d>=0?'+':''}${d.toFixed(1)} п.п.</span>`; };
-  const preds=[...new Set(M.obshiy.filter(r=>r.y===y&&r.m===lastM&&searchOK(r)).map(r=>predmetOf(r.paG)))];
-  const pr=preds.map(P0=>({p:P0,v:meas(y,[lastM],r=>predmetOf(r.paG)===P0&&searchOK(r)).pribFact})).sort((a,b)=>b.v-a.v);
-  const top=pr.slice(0,3), bot=pr.filter(x=>x.v<0).slice(-3).reverse();
-  const fixcpo=DIV(A.postAkr-A.acr,A.zaks);
-  const card=(l,v,d)=>`<div class="mc"><div class="ml">${l}</div><div class="mv" style="font-size:20px">${v}</div>${d?`<div class="md">${d}</div>`:''}</div>`;
-  const block=(ttl,lines,full)=>`<div class="insb${full?' full':''}"><div class="insh">${ttl}</div>${lines.map(t=>`<div class="insl">${t}</div>`).join('')}</div>`;
+        // Выкуп, руб (как в Power BI)
 
-  el.innerHTML=`
-    <div class="sh"><div class="st">Инсайты · ${mName} ${y}</div><div class="sm2">последний завершённый месяц · пересказ таблиц и графиков (генерируется автоматически)</div></div>
-    <div class="mg" style="margin-bottom:16px">
-      ${card('Выручка (Выкуп,руб)',fi(A.vykr),`м/м ${ar(A.vykr,P.vykr)} · г/г ${ar(A.vykr,Yq.vykr)}`)}
-      ${card('Прибыль.Факт (асс.)',fi(A.pribFact),`м/м ${ar(A.pribFact,P.pribFact)} · г/г ${ar(A.pribFact,Yq.pribFact)}`)}
-      ${card('Рентабельность',fp(A.pribFactP),`м/м ${pp(A.pribFactP,P.pribFactP)}`)}
-      ${card('Выкупаемость',fp(A.vkp),`м/м ${pp(A.vkp,P.vkp)}`)}
-    </div>
-    <div class="inscol">
-      ${block('💰 Итоги месяца',[
-        `Выручка <b>${fi(A.vykr)} ₽</b>, чистая прибыль <b>${fi(A.pribFact)} ₽</b>, рентабельность <b>${fp(A.pribFactP)}</b>.`,
-        `К предыдущему месяцу (${MONTHS[pm.mm-1]}): выручка ${ar(A.vykr,P.vykr)}, прибыль ${ar(A.pribFact,P.pribFact)}.`,
-        `К тому же месяцу год назад (${mName} ${y-1}): выручка ${ar(A.vykr,Yq.vykr)}, прибыль ${ar(A.pribFact,Yq.pribFact)}.`,
-        `Нарастающим итогом январь–${mName}: прибыль <b>${fi(YT.pribFact)} ₽</b> против <b>${fi(YTp.pribFact)} ₽</b> год назад (${ar(YT.pribFact,YTp.pribFact)}).`,
-        `Лидеры по прибыли: ${top.map(x=>`<b>${x.p}</b> (${fi(x.v)} ₽)`).join(', ')||'—'}.${bot.length?` Убыточные: ${bot.map(x=>`<b>${x.p}</b> (${fi(x.v)} ₽)`).join(', ')}.`:''}`,
-      ],true)}
-      ${block('📣 Реклама',[
-        `Затраты на рекламу <b>${fi(A.rek)} ₽</b> (м/м ${ar(A.rek,P.rek)}, г/г ${ar(A.rek,Yq.rek)}).${A.rekEst?' ⚠ оценка 300 000 ₽ (записано <30к).':''}`,
-        `ДРР от продаж <b>${fp1(A.drrSa)}</b>, от заказов <b>${fp1(A.drr)}</b>.`,
-        `Стоимость привлечения: CPO <b>${fi(A.advCPO)} ₽</b>/заказ, CPS <b>${fi(A.advCPS)} ₽</b>/выкуп.`,
-      ])}
-      ${block('🚚 Логистика',[
-        `Доставка <b>${fi(A.dost)} ₽</b> (<b>${fp1(A.dostP)}</b> от выручки), хранение <b>${fi(A.hran)} ₽</b> (<b>${fp1(A.hranP)}</b>).`,
-        `Log.CPS <b>${fi(A.logCPS)} ₽</b>/выкуп, Stock.CPS <b>${f2(A.stockCPS)} ₽</b>/выкуп.`,
-      ])}
-      ${block('🏠 Постоянные расходы',[
-        `Пост.Р(+акр) <b>${fi(A.postAkr)} ₽</b> = постоянные <b>${fi(A.postAkr-A.acr)} ₽</b> + акруалс <b>${fi(A.acr)} ₽</b>.`,
-        `Fix.CPO <b>${fi(fixcpo)} ₽</b>/заказ.`,
-      ])}
-      ${block('🧾 Средний чек',[
-        `Средний чек заказа <b>${fi(A.srchek)} ₽</b> (м/м ${ar(A.srchek,P.srchek)}, г/г ${ar(A.srchek,Yq.srchek)}), цена выкупа <b>${fi(A.cena)} ₽</b>.`,
-        `Выкупаемость <b>${fp(A.vkp)}</b> (м/м ${pp(A.vkp,P.vkp)}, г/г ${pp(A.vkp,Yq.vkp)}).`,
-      ])}
-    </div>`;
-}
+        const vykr = Math.round(
+            o.salesRub +
+            o.bonusRub +
+            o.returnRub +
+            o.partnerRub
+        );
 
-/* ═══════════ UI / ЗАГРУЗКА ═══════════ */
-const CFG_KEYS=['worker','pass','report','rashod','art','log','sht','acr','post','ekon'];
-function fillSettings(){CFG_KEYS.forEach(k=>{const e=document.getElementById('u_'+k);if(e)e.value=CFG[k]||'';});}
-function openSetup(){fillSettings();document.getElementById('setup').classList.add('show');}
-function readSettings(){CFG={};CFG_KEYS.forEach(k=>{const e=document.getElementById('u_'+k);CFG[k]=e?e.value.trim():'';});try{localStorage.setItem(LS_KEY,JSON.stringify(CFG));}catch(e){}}
-async function saveAndLoad(){readSettings();await load(true);}
-async function load(fromSetup){
-  const msg=document.getElementById('smsg'); if(fromSetup){msg.className='smsg';msg.textContent='Загрузка…';}
-  document.getElementById('reloadBtn').disabled=true;
-  try{ await buildModel();
-    document.getElementById('fYear').innerHTML=M.years.map(y=>`<option>${y}</option>`).join('');
-    document.getElementById('fMonth').innerHTML='<option value="">Все</option>'+MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
-    /* автодополнение поиска артикулов из справочника/продаж */
-    const arts=[...new Set(M.obshiy.filter(r=>r.vyks>0||r.zaks>0).map(r=>r.paG))].filter(Boolean).sort();
-    document.getElementById('artList').innerHTML=arts.slice(0,1000).map(a=>`<option value="${String(a).replace(/"/g,'&quot;')}">`).join('');
-    document.getElementById('placeholder').style.display='none';
-    document.getElementById('fbar').style.display='flex';
-    document.getElementById('kpi').style.display='grid';
-    document.getElementById('matrixSec').style.display='block';
-    render(); renderDiag();
-    if(fromSetup){msg.className='smsg ok';msg.textContent='Готово ✓';setTimeout(()=>document.getElementById('setup').classList.remove('show'),600);}
-  }catch(e){ renderDiag();
-    if(fromSetup){msg.className='smsg err';msg.textContent='Ошибка: '+e.message+'\n(см. диагностику)';}
-    else{document.getElementById('placeholder').innerHTML='Ошибка: '+e.message+'<div><button class="loadbtn" onclick="openSetup()">Настройки</button></div>';}
-  }
-  document.getElementById('reloadBtn').disabled=false;
+        // Цена нам
+
+        const price =
+            o.salesQty
+                ? vykr / o.salesQty
+                : 0;
+
+        // Заказ, руб
+
+        const zakr = Math.round(
+            price * o.orderQty
+        );
+
+        // Логистика
+
+        const dost = Math.round(
+            -(o.log + o.voz)
+        );
+
+        // Реклама
+
+        const rek = Math.round(
+            -o.rek
+        );
+
+        // Переменные
+
+        const perem = Math.round(
+            (ekonByCode[lnk(o.code)] || 0) *
+            o.salesQty
+        );
+
+        // Налог
+
+        const nalog = Math.round(
+            vykr * 0.07
+        );
+
+        return {
+
+            paG : o.paG,
+
+            y : o.y,
+            m : o.m,
+
+            // ======== как в Power BI ========
+
+            zaks : o.orderQty,
+
+            vyks : o.salesQty,
+
+            zakr : zakr,
+
+            vykr : vykr,
+
+            // ================================
+
+            rek : rek,
+
+            post : 0,
+
+            nalog : nalog,
+
+            hran : 0,
+
+            dost : dost,
+
+            perem : perem
+
+        };
+
+    });
+
 }
-function reload(){load(false);}
-function toggleDiag(){document.getElementById('diag').classList.toggle('show');renderDiag();}
-function renderDiag(){ const d=document.getElementById('diag'); if(!M.diag)return;
-  let h='<b>Диагностика загрузки</b><table>';
-  M.diag.forEach(x=>{const dot=x.status==='ok'?'ok':x.status==='warn'?'warn':'err';
-    h+=`<tr><td><span class="dot ${dot}"></span>${x.name}</td><td>${x.rows} строк</td><td>${x.msg||''}</td></tr>`;});
-  h+='</table><div style="margin-top:8px;color:var(--ink3)">Если «ШТ-сопоставление» низкое — сравните строки «ключи расход(перем)» и «ключи ШТУК»: они должны совпадать. Пришлите этот блок — подстрою соединение.</div>';
-  d.innerHTML=h;
-}
-setInterval(()=>{const n=new Date();document.getElementById('clk').textContent=n.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});},1000);
-(function init(){ try{const s=localStorage.getItem(LS_KEY);if(s)CFG={...DEFAULTS,...JSON.parse(s)};}catch(e){}
-  fillSettings(); if(CFG.worker||CFG.report)load(false); else document.getElementById('setup').classList.add('show'); })();
-</script>
-</body>
-</html>
