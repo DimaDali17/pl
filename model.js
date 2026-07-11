@@ -239,7 +239,7 @@ async function buildModel(){
             vyks:o.salesQty,
             zakr:Math.round(price*o.orderQty),
             vykr,
-            kom:Math.round(o.kom),
+            kom:Math.round(-o.kom),
             rek:Math.round(-o.rek),
             post:0,
             nalog:Math.round(vykr*0.07),
