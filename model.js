@@ -242,7 +242,7 @@ async function buildModel(){
             kom:Math.round(-o.kom),
             rek:Math.round(-o.rek),
             post:0,
-            nalog:Math.round(vykr*0.07),
+            nalog:Math.round(vykr*0.12),
             hran:0,
             dost:Math.round(-o.log),
             perem:Math.round(rsFor(o)*o.salesQty)
