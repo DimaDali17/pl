@@ -29,7 +29,7 @@ function meas(y,mArr,filt){
   const postAkr=pR+acr;
   const pribFact=a.vykr+a.kom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr;
   return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr:a.vykr,cena:DIV(a.vykr,a.vyks),
-    perem:a.perem,dost:a.dost,drl:DIV(a.dost,a.vykr),hran:a.hran,kom:a.kom,nalog:a.nalog,
+    perem:a.perem,dost:a.dost,drl:DIV(a.dost,a.vykr),hran:a.hran,kom:a.kom,komP:DIV(a.kom,a.vykr),nalog:a.nalog,
     pribOper,pribOperP:DIV(pribOper,a.vykr),postAkr,rek,rekEst,drr:DIV(rek,a.zakr),
     pribFact,pribFactP:DIV(pribFact,a.vykr),
     advCPO:DIV(rek,a.zaks),advCPS:DIV(rek,a.vyks),drrSa:DIV(rek,a.vykr),
@@ -56,13 +56,14 @@ const COLS=[
   {k:'dost',l:'Дставка',f:fi,t:'Доставка (лист Лог+Хран)'},
   {k:'drl',l:'ДРЛ%',f:fp,t:'Доля логистики = Доставка ÷ Выкуп,руб'},
   {k:'hran',l:'Хранен',f:fi,t:'Хранение (лист Лог+Хран)'},
-  {k:'kom',l:'Ком.МП',f:fi,t:'Комиссия маркетплейса'},
+  {k:'kom',l:'Ком.МП',f:fi,t:'Комиссия маркетплейса (Ozon: отрицательная; WB: 0, вшита в выручку)'},
+  {k:'komP',l:'Ком%',f:fp1,t:'Комиссия МП ÷ Выкуп,руб'},
   {k:'nalog',l:'Налог',f:fi,t:'Налог: 7% до 01.02.2026, далее 11% от К перечислению'},
-  {k:'pribOper',l:'Пр.Опер',f:fi,t:'Операционная прибыль = Выкуп,руб − Переменные − Доставка − Хранение − Налог'},
+  {k:'pribOper',l:'Пр.Опер',f:fi,t:'Операционная прибыль = Выкуп,руб + Ком.МП − Переменные − Доставка − Хранение − Налог'},
   {k:'pribOperP',l:'Оп%',f:fp,hl:1,t:'Прибыль.Опер ÷ Выкуп,руб'},
   {k:'postAkr',l:'Пост+акр',f:fi,t:'Постоянные (с откатом на пр. месяц, если 0) + Акруалс'},
   {k:'rek',l:'Реклама',f:fi,t:'Расходы на рекламу (при включённом правиле <30к → 300к)'},
   {k:'drr',l:'ДРР%',f:fp1,t:'Доля рекламы = Реклама ÷ Заказ,руб'},
-  {k:'pribFact',l:'Пр.Факт(асс)',f:fi,bar:'pf',t:'Факт с акруалс = Пр.Опер − Пост.Р − Реклама − Акруалс'},
+  {k:'pribFact',l:'Пр.Факт(асс)',f:fi,bar:'pf',t:'Факт = Выкуп,руб + Ком.МП − Перем − Доставка − Хранение − Пост.Р − Реклама − Налог − Акруалс'},
   {k:'pribFactP',l:'Ф%',f:fp,hl:1,t:'Прибыль.Факт(асс.) ÷ Выкуп,руб'}
 ];
