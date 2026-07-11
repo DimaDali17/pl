@@ -88,7 +88,7 @@ async function buildModel(){
     const TAX=new Date(2026,1,1); const out=[];
     rr.forEach(r=>{ const d=pdate(r[c_den]); if(!d)return; const post=(r[c_post]||'').trim();
       const rec=artByPostL.get(lnk(post))||artByPostA.get(nk(post)); const paG=rec?rec.paG:('#'+post);
-      const perech=num(r[c_per]); const nalog=taxFlat!=null?Math.round(perech*taxFlat):Math.round(perech*(d>=TAX?0.11:0.07));
+      const perech=num(r[c_per]); const nalog=taxFlat!=null?Math.round(perech*taxFlat):Math.round(perech*(d>=TAX?0.12:0.07));
       out.push({date:d,paG,zaks:intn(r[c_zaks]),vyks:intn(r[c_vyks]),zakr:num(r[c_zakr]),vykr:perech,kom:0,nalog}); });
     return out;
   }
@@ -242,7 +242,7 @@ async function buildModel(){
             kom:Math.round(-o.kom),
             rek:Math.round(-o.rek),
             post:0,
-            nalog:Math.round(vykr*0.12),
+            nalog:Math.round(vykr*((o.y>2026||(o.y===2026&&o.m>=2))?0.12:0.07)),
             hran:0,
             dost:Math.round(-o.log),
             perem:Math.round(rsFor(o)*o.salesQty)
