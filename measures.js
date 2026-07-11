@@ -29,7 +29,7 @@ function meas(y,mArr,filt){
   const postAkr=pR+acr;
   const pribFact=a.vykr+a.kom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr;
   return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr:a.vykr,cena:DIV(a.vykr,a.vyks),
-    perem:a.perem,dost:a.dost,drl:DIV(a.dost,a.vykr),hran:a.hran,nalog:a.nalog,
+    perem:a.perem,dost:a.dost,drl:DIV(a.dost,a.vykr),hran:a.hran,kom:a.kom,nalog:a.nalog,
     pribOper,pribOperP:DIV(pribOper,a.vykr),postAkr,rek,rekEst,drr:DIV(rek,a.zakr),
     pribFact,pribFactP:DIV(pribFact,a.vykr),
     advCPO:DIV(rek,a.zaks),advCPS:DIV(rek,a.vyks),drrSa:DIV(rek,a.vykr),
