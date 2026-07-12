@@ -136,6 +136,18 @@ async function buildModel(){
 
   const obEZ=(raw.wbfin_ezfr&&raw.wbfin_ezfr.length)?parseWBFin(raw.wbfin_ezfr):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2);
 
+  /* Если EZFR из финотчёта — заказы (zaks, zakr) берём из report2 */
+  if(raw.wbfin_ezfr&&raw.wbfin_ezfr.length&&salesEZ.length){
+    const orderMap={};
+    for(const r of salesEZ){if(!r.date)continue;
+      const key=r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.paG;
+      const o=orderMap[key]||(orderMap[key]={zaks:0,zakr:0});
+      o.zaks+=r.zaks; o.zakr+=r.zakr;}
+    for(const r of obEZ){
+      const key=r.y+'-'+r.m+'|'+r.paG;
+      if(orderMap[key]){r.zaks=orderMap[key].zaks; r.zakr=orderMap[key].zakr;}}
+  }
+
   /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
   /* Логистика WB = Доставка[37] + ПВЗ[28] + Возмещение издержек[58] + Приёмка[62]  */
   /* Хранение отдельно = [60]                                                        */
