@@ -1,5 +1,5 @@
 /* ═══════════ ЗАГРУЗКА ═══════════ */
-const SHEETS=['report','rashod','art','log','sht','acr','post','ekon','report2','log2','sht2','ekon2','ozon'];
+const SHEETS=['report','rashod','art','log','sht','acr','post','ekon','report2','log2','sht2','ekon2','ozon','wbfin_ezfr'];
 const REQ=['report','rashod','art','log','sht','acr'];
 async function fetchCSVdirect(url){ const r=await fetch(url); if(!r.ok)throw new Error('HTTP '+r.status); return await r.text(); }
 
@@ -124,14 +124,102 @@ async function buildModel(){
     });
   }
 
-  const salesEF=parseSales(raw.report,null), salesEZ=parseSales(raw.report2,0.07);
+  const salesEF=parseSales(raw.report,null);
+  /* EZFR: если есть еженедельный финотчёт — берём оттуда, иначе старый report2 */
+  const salesEZ=parseSales(raw.report2,0.07);
   const setEF=new Set(salesEF.map(r=>lnk(r.paG))), setEZ=new Set(salesEZ.map(r=>lnk(r.paG)));
   const xEF=[],xEZ=[];
   xRows.forEach(r=>{ const k=lnk(r.pa);
     if(setEZ.has(k)&&!setEF.has(k)){ xEZ.push(Object.assign({},r,{post:0})); } else { xEF.push(r); } });
   const obEF=buildCo(salesEF,parseLog(raw.log),xEF,raw.sht);
   acGroup.forEach(r=>obEF.push({paG:r.paG,y:r.date.getFullYear(),m:r.date.getMonth()+1,zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}));
-  const obEZ=buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2);
+
+  const obEZ=(raw.wbfin_ezfr&&raw.wbfin_ezfr.length)?parseWBFin(raw.wbfin_ezfr):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2);
+
+  /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
+  function parseWBFin(rr){
+    if(!rr||!rr.length)return[];
+    const H=rr._headers;
+    const c_art=col(H,'Артикул поставщика');
+    const c_pred=col(H,'Предмет');
+    const c_reason=col(H,'Обоснование для оплаты');
+    const c_doctype=col(H,'Тип документа');
+    const c_date=col(H,'Дата продажи');
+    const c_qty=col(H,'Кол-во');
+    const c_retail=col(H,'Цена розничная с учетом согласованной скидки','Цена розничная с учётом согласованной скидки');
+    const c_pay=col(H,'К перечислению Продавцу за реализованный Товар','К перечислению Продавцу');
+    const c_dost=col(H,'Услуги по доставке товара покупателю');
+    const c_hran=col(H,'Хранение');
+    const c_uderz=col(H,'Удержания');
+    const c_shtraf=col(H,'Общая сумма штрафов');
+
+    const map={};
+    const totals={}; /* хранение и удержания без артикула — по месяцам */
+    const ym=d=>d.getFullYear()+'-'+(d.getMonth()+1);
+
+    rr.forEach(r=>{
+      const d=pdate(r[c_date]); if(!d)return;
+      const reason=(r[c_reason]||'').trim();
+      const art=(r[c_art]||'').trim();
+      const k_ym=ym(d);
+
+      if(reason==='Продажа'||reason==='Возврат'||reason==='Добровольная компенсация при возврате'||reason==='Компенсация ущерба'){
+        if(!art)return;
+        const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
+        const paG=rec?rec.paG:('#'+art);
+        const key=k_ym+'|'+paG;
+        const o=map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,vyks:0,vykrGross:0,kPerech:0,dost:0});
+
+        const qty=intn(r[c_qty]);
+        const retail=num(r[c_retail]);
+        const pay=num(r[c_pay]);
+        const isSale=(r[c_doctype]||'').trim()==='Продажа';
+
+        if(isSale){o.vyks+=qty; o.vykrGross+=retail; o.kPerech+=pay;}
+        else      {o.vyks-=qty; o.vykrGross-=retail; o.kPerech-=pay;}
+      }
+      else if(reason==='Логистика'){
+        if(!art)return;
+        const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
+        const paG=rec?rec.paG:('#'+art);
+        const key=k_ym+'|'+paG;
+        const o=map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,vyks:0,vykrGross:0,kPerech:0,dost:0});
+        o.dost+=num(r[c_dost]);
+      }
+      else if(reason==='Хранение'){
+        const t=totals[k_ym]||(totals[k_ym]={y:d.getFullYear(),m:d.getMonth()+1,hran:0,rek:0,shtraf:0});
+        t.hran+=num(r[c_hran]);
+      }
+      else if(reason==='Удержание'){
+        const t=totals[k_ym]||(totals[k_ym]={y:d.getFullYear(),m:d.getMonth()+1,hran:0,rek:0,shtraf:0});
+        t.rek+=num(r[c_uderz]);
+      }
+      else if(reason==='Штраф'){
+        const t=totals[k_ym]||(totals[k_ym]={y:d.getFullYear(),m:d.getMonth()+1,hran:0,rek:0,shtraf:0});
+        t.shtraf+=num(r[c_shtraf]);
+      }
+    });
+
+    /* Собираем финальные строки */
+    const out=[];
+    for(const o of Object.values(map)){
+      const vykr=Math.round(o.vykrGross);
+      const kom=Math.max(0,Math.round(o.vykrGross-o.kPerech));
+      const net=Math.round(o.kPerech);
+      out.push({paG:o.paG,y:o.y,m:o.m,
+        zaks:0,vyks:o.vyks,zakr:0,vykr,
+        kom,rek:0,post:0,
+        nalog:Math.round(net*0.07),
+        hran:0,dost:Math.round(o.dost),perem:0});
+    }
+    /* Хранение и удержания (без артикула) — отдельными строками по месяцам */
+    for(const t of Object.values(totals)){
+      if(t.hran) out.push({paG:'(Хранение)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:Math.round(t.hran),dost:0,perem:0});
+      if(t.rek)  out.push({paG:'(Удержания WB)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.rek),post:0,nalog:0,hran:0,dost:0,perem:0});
+      if(t.shtraf) out.push({paG:'(Штрафы)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.shtraf),post:0,nalog:0,hran:0,dost:0,perem:0});
+    }
+    return out;
+  }
 
   /* ── Ozon: отчёт по начислениям → схема Общего ── */
   function parseOzon(rr){
