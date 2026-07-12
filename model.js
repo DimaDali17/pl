@@ -137,6 +137,8 @@ async function buildModel(){
   const obEZ=(raw.wbfin_ezfr&&raw.wbfin_ezfr.length)?parseWBFin(raw.wbfin_ezfr):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2);
 
   /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
+  /* Логистика WB = Доставка[37] + ПВЗ[28] + Возмещение издержек[58] + Приёмка[62]  */
+  /* Хранение отдельно = [60]                                                        */
   function parseWBFin(rr){
     if(!rr||!rr.length)return[];
     const H=rr._headers;
@@ -149,6 +151,9 @@ async function buildModel(){
     const c_retail=col(H,'Цена розничная с учетом согласованной скидки','Цена розничная с учётом согласованной скидки');
     const c_pay=col(H,'К перечислению Продавцу за реализованный Товар','К перечислению Продавцу');
     const c_dost=col(H,'Услуги по доставке товара покупателю');
+    const c_pvz=col(H,'Возмещение за выдачу и возврат товаров на ПВЗ');
+    const c_vozmesh=col(H,'Возмещение издержек по перевозке/по складским операциям с товаром');
+    const c_priemka=col(H,'Операции на приемке','Операции на приёмке');
     const c_hran=col(H,'Хранение');
     const c_uderz=col(H,'Удержания');
     const c_shtraf=col(H,'Общая сумма штрафов');
@@ -157,45 +162,69 @@ async function buildModel(){
     const totals={}; /* хранение и удержания без артикула — по месяцам */
     const ym=d=>d.getFullYear()+'-'+(d.getMonth()+1);
 
+    const getOrCreate=(key,paG,d)=>map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,vyks:0,vykrGross:0,kPerech:0,dost:0});
+    const getTotals=k=>totals[k]||(totals[k]={y:0,m:0,hran:0,rek:0,shtraf:0,priemka:0});
+    const resolveArt=art=>{
+      const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
+      return rec?rec.paG:('#'+art);
+    };
+
     rr.forEach(r=>{
       const d=pdate(r[c_date]); if(!d)return;
       const reason=(r[c_reason]||'').trim();
       const art=(r[c_art]||'').trim();
       const k_ym=ym(d);
 
+      /* ── Продажи / Возвраты / Компенсации ── */
       if(reason==='Продажа'||reason==='Возврат'||reason==='Добровольная компенсация при возврате'||reason==='Компенсация ущерба'){
         if(!art)return;
-        const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
-        const paG=rec?rec.paG:('#'+art);
-        const key=k_ym+'|'+paG;
-        const o=map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,vyks:0,vykrGross:0,kPerech:0,dost:0});
-
+        const paG=resolveArt(art);
+        const o=getOrCreate(k_ym+'|'+paG,paG,d);
         const qty=intn(r[c_qty]);
         const retail=num(r[c_retail]);
         const pay=num(r[c_pay]);
         const isSale=(r[c_doctype]||'').trim()==='Продажа';
-
         if(isSale){o.vyks+=qty; o.vykrGross+=retail; o.kPerech+=pay;}
         else      {o.vyks-=qty; o.vykrGross-=retail; o.kPerech-=pay;}
       }
+      /* ── Логистика (доставка по артикулам) ── */
       else if(reason==='Логистика'){
         if(!art)return;
-        const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
-        const paG=rec?rec.paG:('#'+art);
-        const key=k_ym+'|'+paG;
-        const o=map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,vyks:0,vykrGross:0,kPerech:0,dost:0});
+        const paG=resolveArt(art);
+        const o=getOrCreate(k_ym+'|'+paG,paG,d);
         o.dost+=num(r[c_dost]);
       }
+      /* ── Возмещение за выдачу на ПВЗ (по артикулам если есть) ── */
+      else if(reason==='Возмещение за выдачу и возврат товаров на ПВЗ'){
+        const v=num(r[c_pvz]);
+        if(art){const paG=resolveArt(art);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
+        else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
+      }
+      /* ── Возмещение издержек по перевозке (по артикулам если есть) ── */
+      else if(reason==='Возмещение издержек по перевозке/по складским операциям с товаром'){
+        const v=num(r[c_vozmesh]);
+        if(art){const paG=resolveArt(art);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
+        else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
+      }
+      /* ── Обработка товара / приёмка ── */
+      else if(reason==='Обработка товара'){
+        const v=num(r[c_priemka]);
+        if(art){const paG=resolveArt(art);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
+        else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
+      }
+      /* ── Хранение (без артикула) ── */
       else if(reason==='Хранение'){
-        const t=totals[k_ym]||(totals[k_ym]={y:d.getFullYear(),m:d.getMonth()+1,hran:0,rek:0,shtraf:0});
+        const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;
         t.hran+=num(r[c_hran]);
       }
+      /* ── Удержания = WB Продвижение, Джем, опции и пр. ── */
       else if(reason==='Удержание'){
-        const t=totals[k_ym]||(totals[k_ym]={y:d.getFullYear(),m:d.getMonth()+1,hran:0,rek:0,shtraf:0});
+        const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;
         t.rek+=num(r[c_uderz]);
       }
+      /* ── Штрафы ── */
       else if(reason==='Штраф'){
-        const t=totals[k_ym]||(totals[k_ym]={y:d.getFullYear(),m:d.getMonth()+1,hran:0,rek:0,shtraf:0});
+        const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;
         t.shtraf+=num(r[c_shtraf]);
       }
     });
@@ -212,11 +241,12 @@ async function buildModel(){
         nalog:Math.round(net*0.07),
         hran:0,dost:Math.round(o.dost),perem:0});
     }
-    /* Хранение и удержания (без артикула) — отдельными строками по месяцам */
+    /* Хранение, удержания, штрафы, приёмка (без артикула) — отдельно по месяцам */
     for(const t of Object.values(totals)){
       if(t.hran) out.push({paG:'(Хранение)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:Math.round(t.hran),dost:0,perem:0});
       if(t.rek)  out.push({paG:'(Удержания WB)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.rek),post:0,nalog:0,hran:0,dost:0,perem:0});
       if(t.shtraf) out.push({paG:'(Штрафы)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.shtraf),post:0,nalog:0,hran:0,dost:0,perem:0});
+      if(t.priemka) out.push({paG:'(Приёмка/ПВЗ)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:Math.round(t.priemka),perem:0});
     }
     return out;
   }
