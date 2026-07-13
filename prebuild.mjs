@@ -44,15 +44,23 @@ const esc = v => {
 const toCSV = aoa => aoa.map(r => r.map(esc).join(',')).join('\n');
 
 /* xlsx (buffer) → csv-текст только из нужных колонок */
-function xlsxToCSV(buf, fname, isGS) {
-  /* Google-таблицы приезжают из export как CSV в UTF-8.
-     Скармливать их SheetJS буфером нельзя — он угадает кодировку и убьёт кириллицу.
-     Декодируем сами и читаем как строку. */
-  const wb = isGS
-    ? XLSX.read(buf.toString('utf8'), { type: 'string', cellDates: true, dateNF: 'yyyy-mm-dd' })
-    : XLSX.read(buf, { type: 'buffer', cellDates: true, dateNF: 'yyyy-mm-dd' });
+/* Числа пишем САМИ, с точкой и без разделителей тысяч.
+   Нельзя отдавать это на откуп форматированию: «24,417» ниже по течению
+   превратится в 24417 (num() решит, что запятая — разделитель тысяч). */
+function cellToStr(v) {
+  if (v == null) return '';
+  if (v instanceof Date) {
+    const p = n => String(n).padStart(2, '0');
+    return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+  }
+  if (typeof v === 'number') return String(v);          /* точка, всегда */
+  return String(v);
+}
+
+function xlsxToCSV(buf, fname) {
+  const wb = XLSX.read(buf, { type: 'buffer', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd', blankrows: false });
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: false });
   if (!aoa.length) { warn(`${fname}: пустой лист`); return ''; }
 
   const head = aoa[0].map(norm);
@@ -63,7 +71,7 @@ function xlsxToCSV(buf, fname, isGS) {
   const out = [WBFIN_COLS];
   for (let i = 1; i < aoa.length; i++) {
     const r = aoa[i];
-    out.push(idx.map(j => (j < 0 ? '' : (r[j] ?? ''))));
+    out.push(idx.map(j => (j < 0 ? '' : cellToStr(r[j]))));
   }
   return toCSV(out);
 }
@@ -118,15 +126,21 @@ async function listSources() {
       const isGS = x.mimeType === GS;
       out.push({ co, name: x.name, id: x.id, modifiedTime: x.modifiedTime, isGS,
         read: async () => {
+          /* Google-таблицы забираем как XLSX, а НЕ как CSV.
+             Экспорт в CSV пишет числа в локали документа: «24,417» — три знака после
+             запятой, и num() принимает запятую за разделитель тысяч → 24417 (×1000).
+             В xlsx числа лежат числами, локали нет. */
           const r = isGS
-            ? await drive.files.export({ fileId: x.id, mimeType: 'text/csv' }, { responseType: 'arraybuffer' })
+            ? await drive.files.export(
+                { fileId: x.id, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+                { responseType: 'arraybuffer' })
             : await drive.files.get({ fileId: x.id, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
           return Buffer.from(r.data);
         } });
     }
   }
   const nGS = out.filter(f => f.isGS).length;
-  if (nGS) warn(`${nGS} файлов — Google-таблицы (конвертированные). Читаю через export CSV.`);
+  if (nGS) warn(`${nGS} файлов — Google-таблицы (конвертированные). Забираю через export XLSX.`);
   return out;
 }
 
@@ -145,7 +159,7 @@ async function buildWbfin(files, co) {
     let csv;
     if (fs.existsSync(cp)) { csv = fs.readFileSync(cp, 'utf8'); hit++; }
     else {
-      csv = xlsxToCSV(await f.read(), f.name, f.isGS);
+      csv = xlsxToCSV(await f.read(), f.name);
       fs.writeFileSync(cp, csv);
       miss++;
     }
@@ -300,6 +314,18 @@ for (const co of ['EF', 'EZFR', 'OZON']) {
   const n = (M.co[co]?.ob || []).length;
   log(`${co}: ${n} строк агрегата`);
   if (co !== 'OZON' && n < MIN_ROWS) die(`${co}: подозрительно мало строк (${n} < ${MIN_ROWS}) — источник не доехал?`);
+}
+
+/* Контроль разложения комиссии: ВВ + НДС + эквайринг + ПВЗ должны в сумме
+   давать ровно kom (= ВБ реализовал − К перечислению). Если нет — числа испорчены
+   по дороге (локаль, кодировка, не та колонка). Именно так ловится «×1000». */
+const ezOb = (M.co.EZFR?.ob || []);
+const komSum = ezOb.reduce((s, r) => s + (r.kom || 0), 0);
+const otherSum = ezOb.reduce((s, r) => s + Math.abs(r.komOther || 0), 0);
+if (komSum > 0) {
+  const drift = otherSum / komSum;
+  log(`EZFR: контроль комиссии — нераспознано ${Math.round(otherSum).toLocaleString('ru-RU')} ₽ из ${Math.round(komSum).toLocaleString('ru-RU')} ₽ (${(drift * 100).toFixed(2)}%)`);
+  if (drift > 0.01) die('разложение комиссии не сходится — числа испорчены по дороге (проверьте формат источника)');
 }
 
 /* CONS не пишем: это конкатенация трёх — фронт соберёт сам, экономим ~половину файла */
