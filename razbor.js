@@ -83,10 +83,10 @@ function renderRazbor(el,y,q,sM){
   const chart=chartCard(`Waterfall · ${y}${per}`,
     legItem('var(--blue)','Розничная цена',.75)+legItem('var(--red)','Расходы / скидка',.55)+legItem('var(--green)','Итоги',.75),
     chartWaterfall(K));
-  el.innerHTML=chart
-    +section(`Разбор по месяцам · ${y}`,
+  el.innerHTML=section(`Разбор по месяцам · ${y}`,
       `розничная → скидка WB → выручка → комиссия → логистика → налог → прибыль · комиссия ${fp1(K.komRoznP)} от розничной, ${fp1(K.komP)} от реализованной`,
       rzStepTable(y,searchOK,sM))
+    +chart
     +section(`Разбор по предметам · ${y}${per}`,'',breakdownTable(rzCols(y),y,q,'predmet',sM))
     +section(`Разбор по артикулам · ${y}${per}`,'артикулы <100 заказов → «Прочее»',breakdownTable(rzCols(y),y,q,'artikul',sM));
 }
