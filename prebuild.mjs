@@ -14,7 +14,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import * as XLSX from 'xlsx';
 
-const ROOT      = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT      = process.cwd();   /* Actions запускает из корня репо; скрипт может лежать где угодно */
 const CACHE_DIR = path.join(ROOT, 'cache');
 const OUT_FILE  = path.join(ROOT, 'data', 'model.json');
 
@@ -170,6 +170,15 @@ async function fetchSheets() {
 }
 
 /* ═══════════ ЗАПУСК model.js В NODE ═══════════ */
+/* Скрипты могут лежать и в корне репо, и в js/ — ищем сами */
+function srcPath(f) {
+  for (const d of ['', 'js']) {
+    const p = path.join(ROOT, d, f);
+    if (fs.existsSync(p)) return p;
+  }
+  die(`не найден ${f} (искал в корне и в js/)`);
+}
+
 async function runModel(texts) {
   const ctx = vm.createContext({
     console, fetch, URL, TextDecoder, Promise, Math, Date, JSON, Set, Map,
@@ -181,7 +190,7 @@ async function runModel(texts) {
   });
   ctx.globalThis = ctx;
   for (const f of ['config.js', 'parsers.js', 'model.js']) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), ctx, { filename: f });
+    vm.runInContext(fs.readFileSync(srcPath(f), 'utf8'), ctx, { filename: f });
   }
   ctx.__texts = texts;
   await vm.runInContext('buildModel(__texts)', ctx);
