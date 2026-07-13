@@ -164,6 +164,10 @@ async function buildModel(textsOverride){
     });
   }
 
+  /* ставки налога: EF переходит на 12% с 01.02.2026, EZFR всегда 7% */
+  const TAX_EF=(y,m)=>((y>2026||(y===2026&&m>=2))?0.12:0.07);
+  const TAX_EZ=()=>0.07;
+
   const salesEF=parseSales(raw.report,null);
   /* EZFR: если есть еженедельный финотчёт — берём оттуда, иначе старый report2 */
   const salesEZ=parseSales(raw.report2,0.07);
@@ -178,11 +182,45 @@ async function buildModel(textsOverride){
     xRows.forEach(r=>{ const k=lnk(r.pa);
       if(setEZ.has(k)&&!setEF.has(k)){ xEZ.push(Object.assign({},r,{post:0})); } else { xEF.push(r); } });
   }
-  const obEF=buildCo(salesEF,parseLog(raw.log),xEF,raw.sht,artDim);
+  /* ── EF: если приехал еженедельный финотчёт WB — собираем как EZFR ──
+     Выкупы, комиссия, логистика, хранение, налог → из финотчёта.
+     Переменные, реклама, постоянные → из бухгалтерии (лист Расход).
+     Заказы → из report (в финотчёте их нет). */
+  const efFin=!!(raw.wbfin_ef&&raw.wbfin_ef.length);
+  const obEF=efFin?parseWBFin(raw.wbfin_ef,TAX_EF):buildCo(salesEF,parseLog(raw.log),xEF,raw.sht,artDim);
+
+  if(efFin){
+    const puLE=buildPU(xEF,raw.sht,lnk,artDim), puAE=buildPU(xEF,raw.sht,nk,artDim);
+    let noPU=0;
+    for(const r of obEF){
+      let pu=puLE[lnk(r.paG)]; if(pu===undefined)pu=puAE[nk(r.paG)];
+      if(pu===undefined&&r.vyks)noPU++;
+      r.perem=Math.round((pu||0)*r.vyks);
+      if(r.rekWB) r.rek-=r.rekWB;   /* удержания WB гасим — реклама идёт из бухгалтерии; штрафы остаются */
+    }
+    let rekMP=0,rekBlog=0,postBuh=0;
+    groupBy(xEF.filter(r=>r.rek||r.post),r=>r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.pa,
+      rs=>({y:rs[0].date.getFullYear(),m:rs[0].date.getMonth()+1,paG:rs[0].pa,
+            rek:sum(rs,'rek'),rekMP:sum(rs,'rekMP'),rekBlog:sum(rs,'rekBlog'),post:sum(rs,'post')}))
+      .forEach(g=>{ rekMP+=g.rekMP; rekBlog+=g.rekBlog; postBuh+=g.post;
+        obEF.push({paG:g.paG,y:g.y,m:g.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,
+          rek:g.rek,rekMP:g.rekMP,rekBlog:g.rekBlog,rekWB:0,post:g.post,nalog:0,hran:0,dost:0,perem:0}); });
+    /* заказы из report */
+    const omEF={};
+    for(const r of salesEF){ if(!r.date)continue;
+      const k=r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.paG;
+      const o=omEF[k]||(omEF[k]={zaks:0,zakr:0}); o.zaks+=r.zaks; o.zakr+=r.zakr; }
+    for(const r of obEF){ const k=r.y+'-'+r.m+'|'+r.paG; if(omEF[k]){r.zaks=omEF[k].zaks; r.zakr=omEF[k].zakr;} }
+    const rekWBef=obEF.reduce((s,r)=>s+(r.rekWB||0),0);
+    diag.push({name:'EF: финотчёт WB',status:noPU?'warn':'ok',rows:obEF.length,
+      msg:`Реклама: площадка ${Math.round(rekMP).toLocaleString('ru-RU')} ₽ + блогеры ${Math.round(rekBlog).toLocaleString('ru-RU')} ₽`
+        +` (удержания в финотчёте: ${Math.round(rekWBef).toLocaleString('ru-RU')} ₽) · Пост.Р: ${Math.round(postBuh).toLocaleString('ru-RU')} ₽`
+        +(noPU?` · без себестоимости: ${noPU} строк`:'')});
+  }
   acGroup.forEach(r=>obEF.push({paG:r.paG,y:r.date.getFullYear(),m:r.date.getMonth()+1,zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}));
 
   const ezFin=!!(raw.wbfin_ezfr&&raw.wbfin_ezfr.length);
-  const obEZ=ezFin?parseWBFin(raw.wbfin_ezfr):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2,artDim2.length?artDim2:artDim);
+  const obEZ=ezFin?parseWBFin(raw.wbfin_ezfr,TAX_EZ):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2,artDim2.length?artDim2:artDim);
 
   /* ── EZFR на финотчёте + своя бухгалтерия: переменные и реклама из rashod2/sht2 ──
      Реклама берётся из БУХГАЛТЕРИИ. «Удержания» WB из финотчёта остаются в поле rekWB —
@@ -227,7 +265,8 @@ async function buildModel(textsOverride){
   /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
   /* Логистика WB = Доставка[37] + ПВЗ[28] + Возмещение издержек[58] + Приёмка[62]  */
   /* Хранение отдельно = [60]                                                        */
-  function parseWBFin(rr){
+  /* taxFn(y,m) → ставка налога. EZFR: всегда 7%. EF: 7% до 01.02.2026, далее 12%. */
+  function parseWBFin(rr,taxFn){
     if(!rr||!rr.length)return[];
     const H=rr._headers;
     const c_art=col(H,'Артикул поставщика');
@@ -347,7 +386,7 @@ async function buildModel(textsOverride){
       out.push({paG:o.paG,y:o.y,m:o.m,
         zaks:0,vyks:o.vyks,zakr:0,vykr,
         kom,rek:0,post:0,
-        nalog:Math.round(net*0.07),
+        nalog:Math.round(net*(taxFn?taxFn(o.y,o.m):0.07)),
         hran:0,dost:Math.round(o.dost),perem:0,
         /* ── детализация для «Разбор» / «Комиссия ВБ» ── */
         rozn:Math.round(o.rozn),          /* розничная цена до скидки WB */
