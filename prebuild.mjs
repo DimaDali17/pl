@@ -103,19 +103,25 @@ async function listSources() {
 
   const folders = await children(root, `mimeType='application/vnd.google-apps.folder'`);
   const out = [];
+  const GS = 'application/vnd.google-apps.spreadsheet';
   for (const f of folders) {
     const co = f.name.trim().toUpperCase();
     if (co !== 'EF' && co !== 'EZFR') { warn(`папка «${f.name}» пропущена (ожидаю EF или EZFR)`); continue; }
     const files = await children(f.id, `mimeType!='application/vnd.google-apps.folder'`);
-    for (const x of files.filter(x => /\.xlsx?$/i.test(x.name))) {
-      out.push({ co, name: x.name, id: x.id, modifiedTime: x.modifiedTime,
+    /* берём и настоящие .xlsx, и те, что Google при загрузке сконвертировал в Google-таблицы */
+    for (const x of files.filter(x => /\.xlsx?$/i.test(x.name) || x.mimeType === GS)) {
+      const isGS = x.mimeType === GS;
+      out.push({ co, name: x.name, id: x.id, modifiedTime: x.modifiedTime, isGS,
         read: async () => {
-          const r = await drive.files.get({ fileId: x.id, alt: 'media', supportsAllDrives: true },
-                                          { responseType: 'arraybuffer' });
+          const r = isGS
+            ? await drive.files.export({ fileId: x.id, mimeType: 'text/csv' }, { responseType: 'arraybuffer' })
+            : await drive.files.get({ fileId: x.id, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
           return Buffer.from(r.data);
         } });
     }
   }
+  const nGS = out.filter(f => f.isGS).length;
+  if (nGS) warn(`${nGS} файлов — Google-таблицы (конвертированные). Читаю через export CSV.`);
   return out;
 }
 
@@ -231,12 +237,34 @@ async function diagnoseDrive() {
     die('папка пуста — расшарена не та папка?');
   }
   console.log(`Внутри папки:`);
+  const subs = [];
   r.data.files.forEach(f => {
     const isDir = f.mimeType === 'application/vnd.google-apps.folder';
     const isCut = f.mimeType === 'application/vnd.google-apps.shortcut';
-    console.log(`  ${isDir ? '[папка]' : isCut ? '[ярлык]' : '[файл] '} ${f.name}${isCut ? '  ← ярлыки не поддерживаются, нужна сама папка' : ''}`);
+    console.log(`  ${isDir ? '[папка]' : isCut ? '[ярлык]' : '[файл] '} ${f.name}${isCut ? '  ← ярлык, нужна сама папка' : ''}`);
+    if (isDir) subs.push(f);
   });
-  die('нужны подпапки с именами EF и EZFR — см. список выше');
+
+  const want = subs.filter(f => ['EF', 'EZFR'].includes(f.name.trim().toUpperCase()));
+  if (!want.length) die('нет подпапок с именами EF и EZFR — см. список выше');
+
+  /* заглядываем внутрь EF/EZFR: что там вообще лежит */
+  for (const f of want) {
+    const c = await drive.files.list({
+      q: `'${f.id}' in parents and trashed=false`,
+      fields: 'files(name,mimeType)', pageSize: 20,
+      supportsAllDrives: true, includeItemsFromAllDrives: true,
+    });
+    console.log(`\nВнутри «${f.name}»: ${c.data.files.length ? c.data.files.length + '+ объектов' : 'ПУСТО'}`);
+    c.data.files.slice(0, 10).forEach(x => {
+      const isSheet = x.mimeType === 'application/vnd.google-apps.spreadsheet';
+      const isXlsx = /\.xlsx?$/i.test(x.name);
+      const mark = isXlsx ? 'xlsx  ' : isSheet ? 'Sheets' : '?     ';
+      console.log(`  [${mark}] ${x.name}`);
+    });
+    if (!c.data.files.length) console.log(`  → файлы ещё не загружены в эту папку`);
+  }
+  die('в EF/EZFR не найдено ни одного xlsx / Google-таблицы — см. содержимое выше');
 }
 
 /* ═══════════ MAIN ═══════════ */
