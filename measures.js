@@ -1,9 +1,12 @@
 /* ═══════════ ДВИЖОК МЕР ═══════════ */
 const DIV=(a,b)=>b?a/b:0;
 const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
-function agg(y,mset,filt){ const a={zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0};
+function agg(y,mset,filt){ const a={zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0,
+    rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0,komOther:0};
   for(const r of M.obshiy){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
-    a.zaks+=r.zaks;a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem; }
+    a.zaks+=r.zaks;a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem;
+    /* детализация комиссии (есть только у WB-финотчёта; у EF/Ozon — 0) */
+    a.rozn+=(r.rozn||0);a.vv+=(r.vv||0);a.vvNds+=(r.vvNds||0);a.ekvair+=(r.ekvair||0);a.pvz+=(r.pvz||0);a.komOther+=(r.komOther||0); }
   return a; }
 function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
 function postRv(y,mArr,filt){ const a=agg(y,new Set(mArr),filt); if(a.post!==0)return a.post;
@@ -34,7 +37,14 @@ function meas(y,mArr,filt){
     pribFact,pribFactP:DIV(pribFact,a.vykr),
     advCPO:DIV(rek,a.zaks),advCPS:DIV(rek,a.vyks),drrSa:DIV(rek,a.vykr),
     logCPS:DIV(a.dost,a.vyks),stockCPS:DIV(a.hran,a.vyks),dostP:DIV(a.dost,a.vykr),hranP:DIV(a.hran,a.vykr),
-    srchek:DIV(a.zakr,a.zaks),acr};
+    srchek:DIV(a.zakr,a.zaks),acr,
+    /* ── разложение выручки и комиссии (WB-финотчёт) ── */
+    rozn:a.rozn, skidkaWB:a.rozn-a.vykr, skidkaWBp:DIV(a.rozn-a.vykr,a.rozn),
+    vv:a.vv, vvNds:a.vvNds, ekvair:a.ekvair, pvz:a.pvz, komOther:a.komOther,
+    kPerech:a.vykr-a.kom,
+    vvP:DIV(a.vv,a.rozn), vvNdsP:DIV(a.vvNds,a.rozn), ekvairP:DIV(a.ekvair,a.rozn), pvzP:DIV(a.pvz,a.rozn),
+    komRoznP:DIV(a.kom,a.rozn), hasFin:a.rozn>0,
+    postR:pR};
 }
 function predmetOf(paG){const a=M.artByPaG[paG];return a?a.pnew:'(без предмета)';}
 

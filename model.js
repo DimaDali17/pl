@@ -169,12 +169,24 @@ async function buildModel(){
     const c_hran=col(H,'Хранение');
     const c_uderz=col(H,'Удержания');
     const c_shtraf=col(H,'Общая сумма штрафов');
+    /* ── детализация комиссии (для вкладок «Разбор» и «Комиссия ВБ») ── */
+    const c_rozn=col(H,'Цена розничная');                                    /* [15] за ЕДИНИЦУ → умножаем на Кол-во */
+    const c_vv=col(H,'Вознаграждение Вайлдберриз (ВВ), без НДС');            /* [32] */
+    const c_vvnds=col(H,'НДС с Вознаграждения Вайлдберриз');                 /* [33] */
+    const c_ekv=col(H,'Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
+                     'Компенсация платежных услуг/Комиссия за интеграцию платежных сервисов',
+                     'Компенсация платёжных услуг');                          /* [29] эквайринг */
+    /* ВАЖНО: ПВЗ [28] на строках Продажа/Возврат уже входит в (vykr − К перечислению),
+       поэтому здесь он идёт ТОЛЬКО как компонент комиссии. Отдельные строки
+       «Возмещение за выдачу…» — другие строки, они идут в dost (логистику). */
 
     const map={};
     const totals={}; /* хранение и удержания без артикула — по месяцам */
     const ym=d=>d.getFullYear()+'-'+(d.getMonth()+1);
 
-    const getOrCreate=(key,paG,d)=>map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,vyks:0,vykrGross:0,kPerech:0,dost:0});
+    const getOrCreate=(key,paG,d)=>map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,
+      vyks:0,vykrGross:0,kPerech:0,dost:0,
+      rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0});
     const getTotals=k=>totals[k]||(totals[k]={y:0,m:0,hran:0,rek:0,shtraf:0,priemka:0});
     const resolveArt=art=>{
       const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
@@ -196,8 +208,16 @@ async function buildModel(){
         const retail=num(r[c_retail]);
         const pay=num(r[c_pay]);
         const isSale=(r[c_doctype]||'').trim()==='Продажа';
-        if(isSale){o.vyks+=qty; o.vykrGross+=retail; o.kPerech+=pay;}
-        else      {o.vyks-=qty; o.vykrGross-=retail; o.kPerech-=pay;}
+        const sg=isSale?1:-1;
+        o.vyks      += sg*qty;
+        o.vykrGross += sg*retail;
+        o.kPerech   += sg*pay;
+        /* компоненты комиссии: ВВ + НДС ВВ + эквайринг + ПВЗ ≡ vykrGross − kPerech */
+        o.rozn      += sg*num(r[c_rozn])*qty;
+        o.vv        += sg*num(r[c_vv]);
+        o.vvNds     += sg*num(r[c_vvnds]);
+        o.ekvair    += sg*num(r[c_ekv]);
+        o.pvz       += sg*num(r[c_pvz]);
       }
       /* ── Логистика (доставка по артикулам) ── */
       else if(reason==='Логистика'){
@@ -247,11 +267,17 @@ async function buildModel(){
       const vykr=Math.round(o.vykrGross);
       const kom=Math.max(0,Math.round(o.vykrGross-o.kPerech));
       const net=Math.round(o.kPerech);
+      const vv=Math.round(o.vv),vvNds=Math.round(o.vvNds),ekvair=Math.round(o.ekvair),pvz=Math.round(o.pvz);
       out.push({paG:o.paG,y:o.y,m:o.m,
         zaks:0,vyks:o.vyks,zakr:0,vykr,
         kom,rek:0,post:0,
         nalog:Math.round(net*0.07),
-        hran:0,dost:Math.round(o.dost),perem:0});
+        hran:0,dost:Math.round(o.dost),perem:0,
+        /* ── детализация для «Разбор» / «Комиссия ВБ» ── */
+        rozn:Math.round(o.rozn),          /* розничная цена до скидки WB */
+        vv,vvNds,ekvair,pvz,              /* компоненты комиссии */
+        komOther:kom-(vv+vvNds+ekvair+pvz)/* остаток (должен быть ≈0) */
+      });
     }
     /* Хранение, удержания, штрафы, приёмка (без артикула) — отдельно по месяцам */
     for(const t of Object.values(totals)){

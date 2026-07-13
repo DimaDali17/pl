@@ -9,7 +9,7 @@ function switchCo(c){
   if(curTab==='pl')render(); else renderTab();
 }
 function tab(p){ curTab=p; document.querySelectorAll('#tabs .tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
-  ['pl','profit','adv','log','fix','check','insights'].forEach(x=>document.getElementById('page-'+x).style.display=x===p?'block':'none');
+  ['pl','profit','adv','log','fix','check','razbor','komwb','insights'].forEach(x=>document.getElementById('page-'+x).style.display=x===p?'block':'none');
   document.getElementById('grpWrap').style.display=p==='pl'?'flex':'none';
   document.getElementById('pyWrap').style.display=p==='pl'?'flex':'none';
   if(M.loaded){ if(p==='pl')render(); else renderTab(); }
@@ -142,6 +142,10 @@ function renderTab(){
       {l:'Ср.Чек PY',t:'Ср.Чек Заказа прошлого года',fn:(m,f)=>fi(meas(y-1,m,f).srchek)},
     ];
     tabTables(el,chart,'Средний чек','Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт',cols,y,q,sM);
+  } else if(curTab==='razbor'){
+    renderRazbor(el,y,q,sM);
+  } else if(curTab==='komwb'){
+    renderKomWB(el,y,q,sM);
   } else if(curTab==='profit'){
     renderProfit(el,y,q);
   } else if(curTab==='insights'){
