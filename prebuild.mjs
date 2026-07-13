@@ -199,14 +199,60 @@ async function runModel(texts) {
   return vm.runInContext('({co:M.co, artByPaG:M.artByPaG, diag:M.diag})', ctx);
 }
 
+/* ═══════════ ДИАГНОСТИКА ДОСТУПА К DRIVE ═══════════ */
+async function diagnoseDrive() {
+  if (process.env.PL_LOCAL_DIR) return;
+  const { google } = await import('googleapis');
+  const sa = JSON.parse(process.env.GDRIVE_SA_JSON);
+  console.log(`\n── Диагностика Drive ──`);
+  console.log(`Сервисный аккаунт: ${sa.client_email}`);
+  const auth = new google.auth.GoogleAuth({ credentials: sa, scopes: ['https://www.googleapis.com/auth/drive.readonly'] });
+  const drive = google.drive({ version: 'v3', auth });
+  const root = process.env.GDRIVE_FOLDER_ID;
+
+  try {
+    const r = await drive.files.get({ fileId: root, fields: 'id,name,mimeType,owners(emailAddress)', supportsAllDrives: true });
+    console.log(`Папка видна: «${r.data.name}» (${r.data.mimeType})`);
+    if (r.data.mimeType !== 'application/vnd.google-apps.folder')
+      console.log(`⚠ Это НЕ папка. GDRIVE_FOLDER_ID указывает на файл.`);
+  } catch (e) {
+    console.log(`✖ Папка НЕ видна: ${e.message}`);
+    console.log(`  → либо GDRIVE_FOLDER_ID неверный, либо папка не расшарена на ${sa.client_email}`);
+    die('нет доступа к папке на Диске');
+  }
+
+  const r = await drive.files.list({
+    q: `'${root}' in parents and trashed=false`,
+    fields: 'files(id,name,mimeType)', pageSize: 100,
+    supportsAllDrives: true, includeItemsFromAllDrives: true,
+  });
+  if (!r.data.files.length) {
+    console.log(`Внутри папки: пусто (для сервисного аккаунта).`);
+    die('папка пуста — расшарена не та папка?');
+  }
+  console.log(`Внутри папки:`);
+  r.data.files.forEach(f => {
+    const isDir = f.mimeType === 'application/vnd.google-apps.folder';
+    const isCut = f.mimeType === 'application/vnd.google-apps.shortcut';
+    console.log(`  ${isDir ? '[папка]' : isCut ? '[ярлык]' : '[файл] '} ${f.name}${isCut ? '  ← ярлыки не поддерживаются, нужна сама папка' : ''}`);
+  });
+  die('нужны подпапки с именами EF и EZFR — см. список выше');
+}
+
 /* ═══════════ MAIN ═══════════ */
 const t0 = Date.now();
 const files = await listSources();
 log(`источников на Диске: ${files.length}`);
+if (!files.length) await diagnoseDrive();
 
 const texts = await fetchSheets();
 texts.wbfin_ezfr = await buildWbfin(files, 'EZFR');
 if (process.env.WBFIN_EF === '1') texts.wbfin_ef = await buildWbfin(files, 'EF');
+
+/* Без финотчёта model.js МОЛЧА откатится на report2 и выдаст другие цифры.
+   Лучше упасть, чем выложить правдоподобную неправду. */
+if (!texts.wbfin_ezfr && process.env.ALLOW_NO_WBFIN !== '1')
+  die('EZFR: финотчёт не собран (0 файлов на Диске). Модель откатилась бы на report2 и дала другие цифры.');
 
 const M = await runModel(texts);
 
