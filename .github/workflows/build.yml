@@ -51,5 +51,7 @@ jobs:
             echo "Изменений нет"
           else
             git commit -m "data: пересборка model.json [skip ci]"
-            git push
+            # пока шла сборка, в main могли залить правки — иначе push отобьёт
+            git pull --rebase origin main
+            git push origin HEAD:main
           fi
