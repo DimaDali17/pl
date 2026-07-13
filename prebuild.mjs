@@ -294,7 +294,8 @@ if (!files.length) await diagnoseDrive();
 
 const texts = await fetchSheets();
 texts.wbfin_ezfr = await buildWbfin(files, 'EZFR');
-if (process.env.WBFIN_EF === '1') texts.wbfin_ef = await buildWbfin(files, 'EF');
+/* EF на финотчёте WB. Отключается через WBFIN_EF=0 — откатывает EF на report+log. */
+if (process.env.WBFIN_EF !== '0') texts.wbfin_ef = await buildWbfin(files, 'EF');
 
 /* Без финотчёта model.js МОЛЧА откатится на report2 и выдаст другие цифры.
    Лучше упасть, чем выложить правдоподобную неправду. */
@@ -319,13 +320,16 @@ for (const co of ['EF', 'EZFR', 'OZON']) {
 /* Контроль разложения комиссии: ВВ + НДС + эквайринг + ПВЗ должны в сумме
    давать ровно kom (= ВБ реализовал − К перечислению). Если нет — числа испорчены
    по дороге (локаль, кодировка, не та колонка). Именно так ловится «×1000». */
-const ezOb = (M.co.EZFR?.ob || []);
-const komSum = ezOb.reduce((s, r) => s + (r.kom || 0), 0);
-const otherSum = ezOb.reduce((s, r) => s + Math.abs(r.komOther || 0), 0);
-if (komSum > 0) {
+const R = n => Math.round(n).toLocaleString('ru-RU');
+for (const co of ['EF', 'EZFR']) {
+  const ob = (M.co[co]?.ob || []);
+  const komSum = ob.reduce((s, r) => s + (r.kom || 0), 0);
+  const otherSum = ob.reduce((s, r) => s + Math.abs(r.komOther || 0), 0);
+  const vykr = ob.reduce((s, r) => s + (r.vykr || 0), 0);
+  if (!komSum) continue;
   const drift = otherSum / komSum;
-  log(`EZFR: контроль комиссии — нераспознано ${Math.round(otherSum).toLocaleString('ru-RU')} ₽ из ${Math.round(komSum).toLocaleString('ru-RU')} ₽ (${(drift * 100).toFixed(2)}%)`);
-  if (drift > 0.01) die('разложение комиссии не сходится — числа испорчены по дороге (проверьте формат источника)');
+  log(`${co}: выручка ${R(vykr)} ₽ · комиссия ${R(komSum)} ₽ · нераспознано ${R(otherSum)} ₽ (${(drift * 100).toFixed(2)}%)`);
+  if (drift > 0.01) die(`${co}: разложение комиссии не сходится — числа испорчены по дороге`);
 }
 
 /* CONS не пишем: это конкатенация трёх — фронт соберёт сам, экономим ~половину файла */
