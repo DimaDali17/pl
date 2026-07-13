@@ -89,15 +89,26 @@ async function buildModel(textsOverride){
   }
 
   /* ═══════ Мультикомпанийность: EF (report) · EZFR (report2) · OZON · Консолид ═══════ */
-  /* расход построчно (поартикульно). Пост.расходы и Реклама выделяются, остальное — переменные. */
+  /* Расход построчно. Пост.расходы и Реклама выделяются, остальное — переменные.
+     Реклама делится на ДВА вида по колонке «Конкретнее»:
+       rekMP   — реклама на самой площадке (реклама WB, продвижение, джем, буст)
+       rekBlog — блогеры и интеграции (всё, что не опознано как площадка)
+     Группа «Реклама» их не различает — там и «реклама WB», и «интеграция Коняхина». */
+  const RE_MP=/\b(wb|вб|вайлдберриз|wildberries|ozon|озон)\b|продвижен|джем|буст|автореклам|аукцион/i;
   function parseRashod(rr){
     if(!rr||!rr.length)return[];
     const H=rr._headers;
     const x_date=col(H,'Дата'),x_pa=col(H,'Предмет;Артикул продавца','Предмет;Артикул.Глубина','Предмет;Артикул поставщика'),
-      x_chto=col(H,'Что'),x_grp=col(H,'Что (группа)','Что группа'),x_sum=col(H,'Сумма');
+      x_chto=col(H,'Что'),x_grp=col(H,'Что (группа)','Что группа'),x_kon=col(H,'Конкретнее'),x_sum=col(H,'Сумма');
     return rr.map(r=>{ const s=num(r[x_sum]);
-      const rek=(String(r[x_grp]||'').trim()==='Реклама')?s:0; const post=(String(r[x_chto]||'').trim()==='Пост расходы')?s:0;
-      return {date:pdate(r[x_date]),pa:(r[x_pa]||'').trim(),rek,post,per:s-rek-post}; }).filter(r=>r.date);
+      const isRek=String(r[x_grp]||'').trim()==='Реклама';
+      const isPost=String(r[x_chto]||'').trim()==='Пост расходы';
+      const kon=x_kon?String(r[x_kon]||'').trim():'';
+      const rek=isRek?s:0;
+      const rekMP=(isRek&&RE_MP.test(kon))?s:0;
+      const rekBlog=isRek?s-rekMP:0;
+      const post=isPost?s:0;
+      return {date:pdate(r[x_date]),pa:(r[x_pa]||'').trim(),kon,rek,rekMP,rekBlog,post,per:s-rek-post}; }).filter(r=>r.date);
   }
   const xRows =parseRashod(raw.rashod);
   const xRows2=parseRashod(raw.rashod2);   /* своя бухгалтерия EZFR */
@@ -139,16 +150,17 @@ async function buildModel(textsOverride){
   }
   function buildCo(q2,logGroup,xr,shtRaw,dim){
     const puL=buildPU(xr,shtRaw,lnk,dim), puA=buildPU(xr,shtRaw,nk,dim);
-    const xGroup=groupBy(xr,r=>keyDP(r.date,r.pa),rs=>({date:rs[0].date,paG:rs[0].pa,post:sum(rs,'post'),rek:sum(rs,'rek')}));
+    const xGroup=groupBy(xr,r=>keyDP(r.date,r.pa),rs=>({date:rs[0].date,paG:rs[0].pa,post:sum(rs,'post'),rek:sum(rs,'rek'),rekMP:sum(rs,'rekMP'),rekBlog:sum(rs,'rekBlog')}));
     const comb=[];
-    xGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,rek:r.rek,post:r.post}));
+    xGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,rek:r.rek,rekMP:r.rekMP,rekBlog:r.rekBlog,post:r.post}));
     q2.forEach(r=>comb.push({date:r.date,paG:r.paG,zaks:r.zaks,vyks:r.vyks,zakr:r.zakr,vykr:r.vykr,nalog:r.nalog}));
     logGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,hran:r.hran,dost:r.dost}));
     return groupBy(comb.filter(r=>r.date),r=>keyDP(r.date,r.paG),rs=>{
       const paG=rs[0].paG,date=rs[0].date,vyks=sum(rs,'vyks');
       let pu=puL[lnk(paG)]; if(pu===undefined)pu=puA[nk(paG)];
       return {paG,y:date.getFullYear(),m:date.getMonth()+1,zaks:sum(rs,'zaks'),vyks,zakr:sum(rs,'zakr'),vykr:sum(rs,'vykr'),
-        rek:sum(rs,'rek'),post:sum(rs,'post'),nalog:sum(rs,'nalog'),hran:sum(rs,'hran'),dost:sum(rs,'dost'),perem:Math.round((pu||0)*vyks)};
+        rek:sum(rs,'rek'),rekMP:sum(rs,'rekMP'),rekBlog:sum(rs,'rekBlog'),
+        post:sum(rs,'post'),nalog:sum(rs,'nalog'),hran:sum(rs,'hran'),dost:sum(rs,'dost'),perem:Math.round((pu||0)*vyks)};
     });
   }
 
@@ -185,15 +197,18 @@ async function buildModel(textsOverride){
       r.perem=Math.round((pu||0)*r.vyks);
       if(r.rekWB) r.rek-=r.rekWB;    /* гасим только «Удержания WB» — штрафы остаются расходом */
     }
-    /* реклама из бухгалтерии EZFR, помесячно по артикулу. Пост.расходы у EZFR не заводим. */
-    let rekBuh=0;
-    groupBy(xRows2.filter(r=>r.rek),r=>r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.pa,
-      rs=>({y:rs[0].date.getFullYear(),m:rs[0].date.getMonth()+1,paG:rs[0].pa,rek:sum(rs,'rek')}))
-      .forEach(g=>{ rekBuh+=g.rek;
-        obEZ.push({paG:g.paG,y:g.y,m:g.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:g.rek,rekWB:0,post:0,nalog:0,hran:0,dost:0,perem:0}); });
+    /* Реклама и ПОСТОЯННЫЕ из бухгалтерии EZFR, помесячно по артикулу. */
+    let rekMP=0,rekBlog=0,postBuh=0;
+    groupBy(xRows2.filter(r=>r.rek||r.post),r=>r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.pa,
+      rs=>({y:rs[0].date.getFullYear(),m:rs[0].date.getMonth()+1,paG:rs[0].pa,
+            rek:sum(rs,'rek'),rekMP:sum(rs,'rekMP'),rekBlog:sum(rs,'rekBlog'),post:sum(rs,'post')}))
+      .forEach(g=>{ rekMP+=g.rekMP; rekBlog+=g.rekBlog; postBuh+=g.post;
+        obEZ.push({paG:g.paG,y:g.y,m:g.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,
+          rek:g.rek,rekMP:g.rekMP,rekBlog:g.rekBlog,rekWB:0,post:g.post,nalog:0,hran:0,dost:0,perem:0}); });
     const rekWB=obEZ.reduce((s,r)=>s+(r.rekWB||0),0);
     diag.push({name:'EZFR: своя бухгалтерия',status:noPU?'warn':'ok',rows:xRows2.length,
-      msg:`Реклама: бухгалтерия ${Math.round(rekBuh).toLocaleString('ru-RU')} ₽ (финотчёт: ${Math.round(rekWB).toLocaleString('ru-RU')} ₽)`
+      msg:`Реклама: площадка ${Math.round(rekMP).toLocaleString('ru-RU')} ₽ + блогеры ${Math.round(rekBlog).toLocaleString('ru-RU')} ₽`
+        +` (удержания в финотчёте WB: ${Math.round(rekWB).toLocaleString('ru-RU')} ₽) · Пост.Р: ${Math.round(postBuh).toLocaleString('ru-RU')} ₽`
         +(noPU?` · без себестоимости: ${noPU} строк с выкупами — нет пары в Расход/ШТУК EZFR`:'')});
   }
 
