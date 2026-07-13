@@ -44,8 +44,13 @@ const esc = v => {
 const toCSV = aoa => aoa.map(r => r.map(esc).join(',')).join('\n');
 
 /* xlsx (buffer) → csv-текст только из нужных колонок */
-function xlsxToCSV(buf, fname) {
-  const wb = XLSX.read(buf, { type: 'buffer', cellDates: true, dateNF: 'yyyy-mm-dd' });
+function xlsxToCSV(buf, fname, isGS) {
+  /* Google-таблицы приезжают из export как CSV в UTF-8.
+     Скармливать их SheetJS буфером нельзя — он угадает кодировку и убьёт кириллицу.
+     Декодируем сами и читаем как строку. */
+  const wb = isGS
+    ? XLSX.read(buf.toString('utf8'), { type: 'string', cellDates: true, dateNF: 'yyyy-mm-dd' })
+    : XLSX.read(buf, { type: 'buffer', cellDates: true, dateNF: 'yyyy-mm-dd' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd', blankrows: false });
   if (!aoa.length) { warn(`${fname}: пустой лист`); return ''; }
@@ -91,7 +96,7 @@ async function listSources() {
     do {
       const r = await drive.files.list({
         q: `'${parent}' in parents and trashed=false and ${q}`,
-        fields: 'nextPageToken, files(id,name,modifiedTime)',
+        fields: 'nextPageToken, files(id,name,mimeType,modifiedTime)',
         pageSize: 1000, pageToken,
         supportsAllDrives: true, includeItemsFromAllDrives: true,
       });
@@ -140,7 +145,7 @@ async function buildWbfin(files, co) {
     let csv;
     if (fs.existsSync(cp)) { csv = fs.readFileSync(cp, 'utf8'); hit++; }
     else {
-      csv = xlsxToCSV(await f.read(), f.name);
+      csv = xlsxToCSV(await f.read(), f.name, f.isGS);
       fs.writeFileSync(cp, csv);
       miss++;
     }
