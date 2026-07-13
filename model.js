@@ -1,5 +1,5 @@
 /* ═══════════ ЗАГРУЗКА ═══════════ */
-const SHEETS=['report','rashod','art','log','sht','acr','post','ekon','report2','log2','sht2','ekon2','ozon','wbfin_ezfr'];
+const SHEETS=['report','rashod','art','log','sht','acr','post','ekon','report2','log2','sht2','ekon2','ozon','wbfin_ezfr','wbfin_ef'];
 const REQ=['report','rashod','art','log','sht','acr'];
 async function fetchCSVdirect(url){ const r=await fetch(url); if(!r.ok)throw new Error('HTTP '+r.status); return await r.text(); }
 
@@ -27,10 +27,17 @@ async function loadRawTexts(diag){
   return texts;
 }
 
-async function buildModel(){
+/* textsOverride — карта {лист: csv-текст}. Передаётся из build/prebuild.mjs (Node).
+   Без неё работает старый путь: тянуть CSV через воркер (в браузере больше не используется). */
+async function buildModel(textsOverride){
   const diag=[]; M.diag=diag;
-  if(!CFG.worker && !CFG.report) throw new Error('Не задан ни воркер, ни прямые ссылки (см. Настройки).');
-  const texts=await loadRawTexts(diag);
+  let texts;
+  if(textsOverride){
+    texts={}; SHEETS.forEach(k=>{ texts[k]=textsOverride[k]||''; });
+  } else {
+    if(!CFG.worker && !CFG.report) throw new Error('Не задан ни воркер, ни прямые ссылки (см. Настройки).');
+    texts=await loadRawTexts(diag);
+  }
   const raw={};
   SHEETS.forEach(k=>{ let rows=parseCSV(texts[k]||'');
     if(k==='ozon'){ const hi=rows.findIndex(r=>r.some(c=>/тип начисления|сумма итого/i.test(String(c)))); if(hi>0)rows=rows.slice(hi); }

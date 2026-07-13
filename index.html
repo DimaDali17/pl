@@ -9,31 +9,6 @@
 </head>
 <body>
 
-<!-- SETTINGS -->
-<div class="sov" id="setup">
-  <div class="sc">
-    <div class="slogo"><div class="logo">P&L</div><div><div class="stitle">P&amp;L продаж</div><div class="ssub">Google Sheets Dashboard</div></div></div>
-    <div class="sinfo">Данные идут через твой Cloudflare Worker по паролю. Ссылки на таблицы лежат в секретах воркера — в этой странице их нет. Пароль хранится только в этом браузере (localStorage).</div>
-    <div class="ssec">Доступ через Worker</div>
-    <div class="fg"><div class="fl">URL воркера</div><input class="fi" id="u_worker" placeholder="https://pl-proxy.…workers.dev"></div>
-    <div class="fg"><div class="fl">Пароль</div><input class="fi" id="u_pass" type="password" placeholder="ACCESS_PASSWORD"></div>
-
-    <div class="ssec" style="cursor:pointer" onclick="document.getElementById('directBox').style.display=document.getElementById('directBox').style.display==='none'?'block':'none'">▸ Прямые ссылки <span class="opt" style="text-transform:none;letter-spacing:0">(только локальная отладка — не для публичного GitHub!)</span></div>
-    <div id="directBox" style="display:none">
-      <div class="fg"><div class="fl">report</div><input class="fi" id="u_report"></div>
-      <div class="fg"><div class="fl">расход</div><input class="fi" id="u_rashod"></div>
-      <div class="fg"><div class="fl">артикулы</div><input class="fi" id="u_art"></div>
-      <div class="fg"><div class="fl">Лог+Хран</div><input class="fi" id="u_log"></div>
-      <div class="fg"><div class="fl">ШТУК</div><input class="fi" id="u_sht"></div>
-      <div class="fg"><div class="fl">Acruals</div><input class="fi" id="u_acr"></div>
-      <div class="fg"><div class="fl">ПОСТ затраты архив <span class="opt">Fix.CPO</span></div><input class="fi" id="u_post"></div>
-      <div class="fg"><div class="fl">экон <span class="opt">U.* меры</span></div><input class="fi" id="u_ekon"></div>
-    </div>
-    <button class="sbtn" onclick="saveAndLoad()">Сохранить и загрузить</button>
-    <div class="smsg" id="smsg"></div>
-  </div>
-</div>
-
 <!-- HEADER -->
 <div class="header">
   <div class="logo">P&L</div>
@@ -52,7 +27,6 @@
   <div class="hright">
     <div class="clock" id="clk"></div>
     <button class="b" onclick="toggleDiag()">◧ диагностика</button>
-    <button class="b" onclick="openSetup()">⚙ настройки</button>
     <button class="b pri" id="reloadBtn" onclick="reload()">↻ обновить</button>
   </div>
 </div>
@@ -95,7 +69,7 @@
   <div id="page-komwb" style="display:none"></div>
   <div id="page-insights" style="display:none"></div>
 
-  <div id="placeholder" class="lm">⚙ Укажите ссылки в настройках<div><button class="loadbtn" onclick="openSetup()">Открыть настройки</button></div></div>
+  <div id="placeholder" class="lm">Загрузка данных…</div>
 </div>
 
 <!-- JS: порядок важен — каждый файл зависит от предыдущих -->
