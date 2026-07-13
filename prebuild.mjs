@@ -363,7 +363,33 @@ for (const co of ['EF', 'EZFR']) {
   if (!komSum) continue;
   const drift = otherSum / komSum;
   log(`${co}: выручка ${R(vykr)} ₽ · комиссия ${R(komSum)} ₽ · нераспознано ${R(otherSum)} ₽ (${(drift * 100).toFixed(2)}%)`);
-  if (drift > 0.01) die(`${co}: разложение комиссии не сходится — числа испорчены по дороге`);
+
+  if (drift > 0.001) {
+    /* где именно расходится: по годам, затем по месяцам худшего года */
+    const byY = {};
+    ob.forEach(r => {
+      const y = byY[r.y] || (byY[r.y] = { kom: 0, other: 0 });
+      y.kom += (r.kom || 0); y.other += Math.abs(r.komOther || 0);
+    });
+    console.log(`   нераспознанная комиссия ${co} по годам:`);
+    const years = Object.keys(byY).sort();
+    for (const y of years) {
+      const b = byY[y], p = b.kom ? b.other / b.kom * 100 : 0;
+      console.log(`     ${y}: ${R(b.other).padStart(12)} ₽ из ${R(b.kom).padStart(12)} ₽  (${p.toFixed(2)}%)`);
+    }
+    const worst = years.sort((a, b) => byY[b].other - byY[a].other)[0];
+    const byM = {};
+    ob.filter(r => +r.y === +worst).forEach(r => {
+      const m = byM[r.m] || (byM[r.m] = { kom: 0, other: 0 });
+      m.kom += (r.kom || 0); m.other += Math.abs(r.komOther || 0);
+    });
+    console.log(`   ${worst} по месяцам:`);
+    Object.keys(byM).sort((a, b) => a - b).forEach(m => {
+      const b = byM[m], p = b.kom ? b.other / b.kom * 100 : 0;
+      if (b.other > 1) console.log(`     ${String(m).padStart(2)}: ${R(b.other).padStart(11)} ₽  (${p.toFixed(1)}%)`);
+    });
+  }
+  if (drift > (+(process.env.KOM_TOL ?? 0.01))) die(`${co}: разложение комиссии не сходится — см. разбивку выше`);
 }
 
 /* CONS не пишем: это конкатенация трёх — фронт соберёт сам, экономим ~половину файла */
