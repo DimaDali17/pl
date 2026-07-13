@@ -29,11 +29,14 @@ pl-sources/            ← id этой папки пойдёт в GDRIVE_FOLDER_
 ```json
 {"report":"https://docs.google.com/…/pub?gid=0&single=true&output=csv",
  "rashod":"…","art":"…","log":"…","sht":"…","acr":"…","post":"…","ekon":"…",
- "report2":"…","log2":"…","sht2":"…","ekon2":"…","ozon":"…"}
+ "report2":"…","rashod2":"…","art2":"…","log2":"…","sht2":"…","ekon2":"…","ozon":"…"}
 ```
 
 Обязательные листы (иначе сборка падает): `report`, `rashod`, `art`, `log`, `sht`, `acr`.
 Лист `wbfin_ezfr` в карту **не входит** — он собирается из xlsx на Диске.
+
+Своя бухгалтерия EZFR — `rashod2` (Расход), `art2` (Артикул), `sht2` (ШТУК), `ekon2` (Экон).
+Если `rashod2` пустой, EZFR откатывается на старое поведение (расходы выковыриваются из общего листа).
 
 Каждый лист: Файл → Опубликовать в интернете → нужная вкладка → CSV.
 

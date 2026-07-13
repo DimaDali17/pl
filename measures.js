@@ -2,10 +2,11 @@
 const DIV=(a,b)=>b?a/b:0;
 const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
 function agg(y,mset,filt){ const a={zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0,
-    rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0,komOther:0};
+    rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0,komOther:0,rekWB:0};
   for(const r of M.obshiy){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
     a.zaks+=r.zaks;a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem;
     /* детализация комиссии (есть только у WB-финотчёта; у EF/Ozon — 0) */
+    a.rekWB+=(r.rekWB||0);
     a.rozn+=(r.rozn||0);a.vv+=(r.vv||0);a.vvNds+=(r.vvNds||0);a.ekvair+=(r.ekvair||0);a.pvz+=(r.pvz||0);a.komOther+=(r.komOther||0); }
   return a; }
 function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
@@ -44,6 +45,8 @@ function meas(y,mArr,filt){
     kPerech:a.vykr-a.kom,
     vvP:DIV(a.vv,a.rozn), vvNdsP:DIV(a.vvNds,a.rozn), ekvairP:DIV(a.ekvair,a.rozn), pvzP:DIV(a.pvz,a.rozn),
     komRoznP:DIV(a.kom,a.rozn), hasFin:a.rozn>0,
+    /* «Удержания WB» из финотчёта — справочно рядом с рекламой из бухгалтерии (не складываются) */
+    rekWB:a.rekWB, rekDiff:a.rekWB?(a.rek-a.rekWB):0,
     postR:pR};
 }
 function predmetOf(paG){const a=M.artByPaG[paG];return a?a.pnew:'(без предмета)';}

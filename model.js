@@ -1,5 +1,5 @@
 /* ═══════════ ЗАГРУЗКА ═══════════ */
-const SHEETS=['report','rashod','art','log','sht','acr','post','ekon','report2','log2','sht2','ekon2','ozon','wbfin_ezfr','wbfin_ef'];
+const SHEETS=['report','rashod','art','log','sht','acr','post','ekon','report2','rashod2','art2','log2','sht2','ekon2','ozon','wbfin_ezfr','wbfin_ef'];
 const REQ=['report','rashod','art','log','sht','acr'];
 async function fetchCSVdirect(url){ const r=await fetch(url); if(!r.ok)throw new Error('HTTP '+r.status); return await r.text(); }
 
@@ -72,14 +72,35 @@ async function buildModel(textsOverride){
   diag.push({name:'Артикул (справочник)',status:predEmpty>artDim.length*0.5?'err':'ok',rows:artDim.length,
     msg:`Предмет-колонка: ${c_pred||'—'} · пустых предметов: ${predEmpty} · пример: «${smp0.predmet||''}» + «${smp0.glub||''}» → ключ «${smp0.paG||''}»`});
 
+  /* ── Справочник артикулов EZFR (своя бухгалтерия, лист art2) ──
+     Ключи EF и EZFR не перетираем: при совпадении paG приоритет у EF. */
+  const artDim2=[];
+  if(raw.art2&&raw.art2.length){
+    const a2=raw.art2._headers||[];
+    const p_pred=col(a2,'Предмет'),p_post=col(a2,'Артикул поставщика'),p_glub=col(a2,'Артикул.Глубина','Артикул Глубина'),p_new=col(a2,'Предмет_Новый','Предмет;Новый');
+    raw.art2.forEach(r=>{
+      const predmet=(r[p_pred]||'').trim(),post=(r[p_post]||'').trim(),glub=(r[p_glub]||'').trim(),pnew=p_new?(r[p_new]||'').trim():'';
+      const paG=predmet+glub,paP=predmet+post; if(paP===''||paP===';')return;
+      artDim2.push({predmet,post,glub,pnew:pnew||predmet,paG,paP});
+    });
+    artDim2.forEach(a=>{ if(M.artByPaG[a.paP]===undefined)M.artByPaG[a.paP]=a; if(M.artByPaG[a.paG]===undefined)M.artByPaG[a.paG]=a; });
+    artDim2.forEach(a=>{ if(a.post){ if(!artByPostL.has(lnk(a.post)))artByPostL.set(lnk(a.post),a); if(!artByPostA.has(nk(a.post)))artByPostA.set(nk(a.post),a); } });
+    diag.push({name:'Артикул EZFR (art2)',status:'ok',rows:artDim2.length,msg:'своя бухгалтерия EZFR'});
+  }
+
   /* ═══════ Мультикомпанийность: EF (report) · EZFR (report2) · OZON · Консолид ═══════ */
-  /* расход построчно (ОБЩИЙ лист, поартикульно) */
-  const xH=raw.rashod._headers;
-  const x_date=col(xH,'Дата'),x_pa=col(xH,'Предмет;Артикул продавца','Предмет;Артикул.Глубина','Предмет;Артикул поставщика'),
-    x_chto=col(xH,'Что'),x_grp=col(xH,'Что (группа)','Что группа'),x_sum=col(xH,'Сумма');
-  const xRows=raw.rashod.map(r=>{ const s=num(r[x_sum]);
-    const rek=(String(r[x_grp]||'').trim()==='Реклама')?s:0; const post=(String(r[x_chto]||'').trim()==='Пост расходы')?s:0;
-    return {date:pdate(r[x_date]),pa:(r[x_pa]||'').trim(),rek,post,per:s-rek-post}; }).filter(r=>r.date);
+  /* расход построчно (поартикульно). Пост.расходы и Реклама выделяются, остальное — переменные. */
+  function parseRashod(rr){
+    if(!rr||!rr.length)return[];
+    const H=rr._headers;
+    const x_date=col(H,'Дата'),x_pa=col(H,'Предмет;Артикул продавца','Предмет;Артикул.Глубина','Предмет;Артикул поставщика'),
+      x_chto=col(H,'Что'),x_grp=col(H,'Что (группа)','Что группа'),x_sum=col(H,'Сумма');
+    return rr.map(r=>{ const s=num(r[x_sum]);
+      const rek=(String(r[x_grp]||'').trim()==='Реклама')?s:0; const post=(String(r[x_chto]||'').trim()==='Пост расходы')?s:0;
+      return {date:pdate(r[x_date]),pa:(r[x_pa]||'').trim(),rek,post,per:s-rek-post}; }).filter(r=>r.date);
+  }
+  const xRows =parseRashod(raw.rashod);
+  const xRows2=parseRashod(raw.rashod2);   /* своя бухгалтерия EZFR */
 
   /* Acruals (общий, на EF) */
   const acH=raw.acr._headers||[];
@@ -106,18 +127,18 @@ async function buildModel(textsOverride){
       return {date:pdate(r[c_end]),paG:rec?rec.paG:('#'+(r[c_pr]||'')+(r[c_art]||'')),hran:num(r[c_hr]),dost:num(r[c_do])}; }).filter(r=>r.date);
     return groupBy(rows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,hran:sum(rs,'hran'),dost:sum(rs,'dost')}));
   }
-  function buildPU(xr,shtRaw,keyFn){
+  function buildPU(xr,shtRaw,keyFn,dim){
     const sH2=(shtRaw&&shtRaw._headers)||[];
     const s_pa2=col(sH2,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул продавца','Предмет;Артикул'),s_qty2=col(sH2,'ШТ поставлено','ШТ');
     const per={},sht={};
     groupBy(xr,r=>keyFn(r.pa),rs=>({k:keyFn(rs[0].pa),per:sum(rs,'per')})).forEach(g=>{if(g.k)per[g.k]=g.per;});
     (shtRaw||[]).forEach(r=>{ const k=keyFn(r[s_pa2]); if(k)sht[k]=(sht[k]||0)+intn(r[s_qty2]); });
     const pu={}; Object.keys(per).forEach(k=>{ if(sht[k])pu[k]=Math.round(per[k]/sht[k]); });
-    artDim.forEach(a=>{ const kP=keyFn(a.paP),kG=keyFn(a.paG); const v=(pu[kP]!==undefined)?pu[kP]:(pu[kG]!==undefined?pu[kG]:undefined); if(v!==undefined){pu[kP]=v;pu[kG]=v;} });
+    (dim||artDim).forEach(a=>{ const kP=keyFn(a.paP),kG=keyFn(a.paG); const v=(pu[kP]!==undefined)?pu[kP]:(pu[kG]!==undefined?pu[kG]:undefined); if(v!==undefined){pu[kP]=v;pu[kG]=v;} });
     return pu;
   }
-  function buildCo(q2,logGroup,xr,shtRaw){
-    const puL=buildPU(xr,shtRaw,lnk), puA=buildPU(xr,shtRaw,nk);
+  function buildCo(q2,logGroup,xr,shtRaw,dim){
+    const puL=buildPU(xr,shtRaw,lnk,dim), puA=buildPU(xr,shtRaw,nk,dim);
     const xGroup=groupBy(xr,r=>keyDP(r.date,r.pa),rs=>({date:rs[0].date,paG:rs[0].pa,post:sum(rs,'post'),rek:sum(rs,'rek')}));
     const comb=[];
     xGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,rek:r.rek,post:r.post}));
@@ -134,14 +155,47 @@ async function buildModel(textsOverride){
   const salesEF=parseSales(raw.report,null);
   /* EZFR: если есть еженедельный финотчёт — берём оттуда, иначе старый report2 */
   const salesEZ=parseSales(raw.report2,0.07);
+  const ezOwn=xRows2.length>0;   /* у EZFR своя бухгалтерия (лист Расход EZFR) */
   const setEF=new Set(salesEF.map(r=>lnk(r.paG))), setEZ=new Set(salesEZ.map(r=>lnk(r.paG)));
   const xEF=[],xEZ=[];
-  xRows.forEach(r=>{ const k=lnk(r.pa);
-    if(setEZ.has(k)&&!setEF.has(k)){ xEZ.push(Object.assign({},r,{post:0})); } else { xEF.push(r); } });
-  const obEF=buildCo(salesEF,parseLog(raw.log),xEF,raw.sht);
+  if(ezOwn){
+    /* Свой лист Расход убирает ретроспективный роутинг: расходы EZFR больше
+       не выковыриваются из общего листа, а берутся напрямую из rashod2. */
+    xRows.forEach(r=>xEF.push(r));
+  } else {
+    xRows.forEach(r=>{ const k=lnk(r.pa);
+      if(setEZ.has(k)&&!setEF.has(k)){ xEZ.push(Object.assign({},r,{post:0})); } else { xEF.push(r); } });
+  }
+  const obEF=buildCo(salesEF,parseLog(raw.log),xEF,raw.sht,artDim);
   acGroup.forEach(r=>obEF.push({paG:r.paG,y:r.date.getFullYear(),m:r.date.getMonth()+1,zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}));
 
-  const obEZ=(raw.wbfin_ezfr&&raw.wbfin_ezfr.length)?parseWBFin(raw.wbfin_ezfr):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2);
+  const ezFin=!!(raw.wbfin_ezfr&&raw.wbfin_ezfr.length);
+  const obEZ=ezFin?parseWBFin(raw.wbfin_ezfr):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2,artDim2.length?artDim2:artDim);
+
+  /* ── EZFR на финотчёте + своя бухгалтерия: переменные и реклама из rashod2/sht2 ──
+     Реклама берётся из БУХГАЛТЕРИИ. «Удержания» WB из финотчёта остаются в поле rekWB —
+     показываем их справочно рядом (в скобках), НЕ складываем: это те же деньги. */
+  if(ezFin&&ezOwn){
+    const dim2=artDim2.length?artDim2:artDim;
+    const puL2=buildPU(xRows2,raw.sht2,lnk,dim2), puA2=buildPU(xRows2,raw.sht2,nk,dim2);
+    let noPU=0;
+    for(const r of obEZ){
+      let pu=puL2[lnk(r.paG)]; if(pu===undefined)pu=puA2[nk(r.paG)];
+      if(pu===undefined&&r.vyks)noPU++;
+      r.perem=Math.round((pu||0)*r.vyks);
+      if(r.rekWB) r.rek-=r.rekWB;    /* гасим только «Удержания WB» — штрафы остаются расходом */
+    }
+    /* реклама из бухгалтерии EZFR, помесячно по артикулу. Пост.расходы у EZFR не заводим. */
+    let rekBuh=0;
+    groupBy(xRows2.filter(r=>r.rek),r=>r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.pa,
+      rs=>({y:rs[0].date.getFullYear(),m:rs[0].date.getMonth()+1,paG:rs[0].pa,rek:sum(rs,'rek')}))
+      .forEach(g=>{ rekBuh+=g.rek;
+        obEZ.push({paG:g.paG,y:g.y,m:g.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:g.rek,rekWB:0,post:0,nalog:0,hran:0,dost:0,perem:0}); });
+    const rekWB=obEZ.reduce((s,r)=>s+(r.rekWB||0),0);
+    diag.push({name:'EZFR: своя бухгалтерия',status:noPU?'warn':'ok',rows:xRows2.length,
+      msg:`Реклама: бухгалтерия ${Math.round(rekBuh).toLocaleString('ru-RU')} ₽ (финотчёт: ${Math.round(rekWB).toLocaleString('ru-RU')} ₽)`
+        +(noPU?` · без себестоимости: ${noPU} строк с выкупами — нет пары в Расход/ШТУК EZFR`:'')});
+  }
 
   /* Если EZFR из финотчёта — заказы (zaks, zakr) берём из report2 */
   if(raw.wbfin_ezfr&&raw.wbfin_ezfr.length&&salesEZ.length){
@@ -289,7 +343,8 @@ async function buildModel(textsOverride){
     /* Хранение, удержания, штрафы, приёмка (без артикула) — отдельно по месяцам */
     for(const t of Object.values(totals)){
       if(t.hran) out.push({paG:'(Хранение)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:Math.round(t.hran),dost:0,perem:0});
-      if(t.rek)  out.push({paG:'(Удержания WB)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.rek),post:0,nalog:0,hran:0,dost:0,perem:0});
+      /* rekWB дублирует rek: если у EZFR своя бухгалтерия, rek гасится, а rekWB остаётся для справки */
+      if(t.rek)  out.push({paG:'(Удержания WB)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.rek),rekWB:Math.round(t.rek),post:0,nalog:0,hran:0,dost:0,perem:0});
       if(t.shtraf) out.push({paG:'(Штрафы)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.shtraf),post:0,nalog:0,hran:0,dost:0,perem:0});
       if(t.priemka) out.push({paG:'(Приёмка/ПВЗ)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:Math.round(t.priemka),perem:0});
     }

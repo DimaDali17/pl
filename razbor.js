@@ -23,7 +23,8 @@ function rzSteps(k){
     {l:'Налог',                    v:-k.nalog,    t:'sub'});
   if(k.perem) st.push({l:'Переменные',v:-k.perem,t:'sub'});
   st.push({l:'Пр.Опер',            v:k.pribOper,  t:'res'});
-  if(k.rek)     st.push({l:'Реклама / удержания WB',v:-k.rek,    t:'sub'});
+  if(k.rek)     st.push({l:'Реклама',v:-k.rek,t:'sub',
+                  n:k.rekWB?`из бухгалтерии; в финотчёте WB удержано ${fi(k.rekWB)} ₽`:''});
   if(k.postAkr) st.push({l:'Пост.Р + акруалс',      v:-k.postAkr,t:'sub'});
   st.push({l:'Пр.Факт',            v:k.pribFact,  t:'res'});
   return st;
