@@ -380,7 +380,10 @@ async function buildModel(textsOverride){
     const out=[];
     for(const o of Object.values(map)){
       const vykr=Math.round(o.vykrGross);
-      const kom=Math.max(0,Math.round(o.vykrGross-o.kPerech));
+      /* НЕ клампить в 0: если возвратов больше продаж, WB возвращает комиссию,
+         и kom честно отрицательный. Math.max(0,…) рвал тождество
+         kom == ВВ+НДС+эквайринг+ПВЗ и раздувал «нераспознано» до тысяч процентов. */
+      const kom=Math.round(o.vykrGross-o.kPerech);
       const net=Math.round(o.kPerech);
       const vv=Math.round(o.vv),vvNds=Math.round(o.vvNds),ekvair=Math.round(o.ekvair),pvz=Math.round(o.pvz);
       out.push({paG:o.paG,y:o.y,m:o.m,

@@ -366,28 +366,31 @@ for (const co of ['EF', 'EZFR']) {
 
   if (drift > 0.001) {
     /* где именно расходится: по годам, затем по месяцам худшего года */
-    const byY = {};
-    ob.forEach(r => {
-      const y = byY[r.y] || (byY[r.y] = { kom: 0, other: 0 });
-      y.kom += (r.kom || 0); y.other += Math.abs(r.komOther || 0);
-    });
-    console.log(`   нераспознанная комиссия ${co} по годам:`);
-    const years = Object.keys(byY).sort();
+    const acc = (rows) => rows.reduce((a, r) => ({
+      vykr: a.vykr + (r.vykr || 0), kom: a.kom + (r.kom || 0),
+      comp: a.comp + (r.vv || 0) + (r.vvNds || 0) + (r.ekvair || 0) + (r.pvz || 0),
+      other: a.other + (r.komOther || 0),          /* СО ЗНАКОМ */
+      abs: a.abs + Math.abs(r.komOther || 0),
+    }), { vykr: 0, kom: 0, comp: 0, other: 0, abs: 0 });
+
+    const years = [...new Set(ob.map(r => r.y))].sort();
+    console.log(`   ${co}: нераспознанная комиссия по годам (знак: + = kom больше суммы компонент):`);
     for (const y of years) {
-      const b = byY[y], p = b.kom ? b.other / b.kom * 100 : 0;
-      console.log(`     ${y}: ${R(b.other).padStart(12)} ₽ из ${R(b.kom).padStart(12)} ₽  (${p.toFixed(2)}%)`);
+      const b = acc(ob.filter(r => r.y === y));
+      if (!b.kom && !b.abs) continue;
+      const p = b.kom ? b.abs / b.kom * 100 : 0;
+      console.log(`     ${y}: ${(b.other >= 0 ? '+' : '') + R(b.other)} ₽ из ${R(b.kom)} ₽ (${p.toFixed(2)}%)`);
     }
-    const worst = years.sort((a, b) => byY[b].other - byY[a].other)[0];
-    const byM = {};
-    ob.filter(r => +r.y === +worst).forEach(r => {
-      const m = byM[r.m] || (byM[r.m] = { kom: 0, other: 0 });
-      m.kom += (r.kom || 0); m.other += Math.abs(r.komOther || 0);
-    });
-    console.log(`   ${worst} по месяцам:`);
-    Object.keys(byM).sort((a, b) => a - b).forEach(m => {
-      const b = byM[m], p = b.kom ? b.other / b.kom * 100 : 0;
-      if (b.other > 1) console.log(`     ${String(m).padStart(2)}: ${R(b.other).padStart(11)} ₽  (${p.toFixed(1)}%)`);
-    });
+    const worstY = years.map(y => [y, acc(ob.filter(r => r.y === y)).abs]).sort((a, b) => b[1] - a[1])[0][0];
+    const months = [...new Set(ob.filter(r => r.y === worstY).map(r => r.m))].sort((a, b) => a - b);
+    const worstM = months.map(m => [m, acc(ob.filter(r => r.y === worstY && r.m === m)).abs]).sort((a, b) => b[1] - a[1])[0][0];
+    const b = acc(ob.filter(r => r.y === worstY && r.m === worstM));
+    console.log(`   Худший месяц ${worstM}.${worstY} — обе стороны уравнения:`);
+    console.log(`     ВБ реализовал (vykr):        ${R(b.vykr).padStart(14)} ₽`);
+    console.log(`     К перечислению (vykr − kom): ${R(b.vykr - b.kom).padStart(14)} ₽`);
+    console.log(`     kom = vykr − К перечислению: ${R(b.kom).padStart(14)} ₽`);
+    console.log(`     ВВ+НДС+эквайринг+ПВЗ:        ${R(b.comp).padStart(14)} ₽   ← должно совпасть с kom`);
+    console.log(`     расхождение:                 ${R(b.other).padStart(14)} ₽`);
   }
   if (drift > (+(process.env.KOM_TOL ?? 0.01))) die(`${co}: разложение комиссии не сходится — см. разбивку выше`);
 }
