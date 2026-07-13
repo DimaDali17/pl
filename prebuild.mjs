@@ -293,7 +293,9 @@ const M = await runModel(texts);
 const errs = (M.diag || []).filter(d => d.status === 'err');
 if (errs.length) die('обязательные листы пустые: ' + errs.map(d => d.name).join(', '));
 if (!M.co) die('buildModel не собрал M.co');
-const MIN_ROWS = +(process.env.MIN_ROWS ?? 50);
+/* Порог — защита от «источник не доехал», а не от малого кабинета.
+   EZFR это десяток артикулов × несколько месяцев ≈ 30 строк агрегата. */
+const MIN_ROWS = +(process.env.MIN_ROWS ?? 10);
 for (const co of ['EF', 'EZFR', 'OZON']) {
   const n = (M.co[co]?.ob || []).length;
   log(`${co}: ${n} строк агрегата`);
