@@ -16,7 +16,7 @@ import * as XLSX from 'xlsx';
 
 const ROOT      = process.cwd();   /* Actions запускает из корня репо; скрипт может лежать где угодно */
 const CACHE_DIR = path.join(ROOT, 'cache');
-const CACHE_VER = 'v3';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
+const CACHE_VER = 'v4';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
 const OUT_FILE  = path.join(ROOT, 'data', 'model.json');
 
 /* Только эти колонки едут дальше: 19 из 84.
@@ -107,6 +107,45 @@ function xlsxToCSV(buf, fname) {
     const r = aoa[i];
     out.push(idx.map(j => (j < 0 ? '' : cellToStr(r[j]))));
   }
+
+  /* ── Самоконтроль на уровне ОДНОГО файла ──
+     На строках Продажа/Возврат должно выполняться:
+        ВБ реализовал − К перечислению == ВВ + НДС + эквайринг + ПВЗ
+     Если нет — в этом отчёте есть ещё одна статья, которую мы не забираем.
+     Показываем ВСЕ колонки файла с ненулевыми суммами, чтобы её было видно. */
+  const at = name => HEAD.indexOf(name);
+  const iReason = at('Обоснование для оплаты'), iType = at('Тип документа');
+  const iRetail = at('Вайлдберриз реализовал Товар (Пр)'), iPay = at('К перечислению Продавцу за реализованный Товар');
+  const iVV = at('Вознаграждение Вайлдберриз (ВВ), без НДС'), iNDS = at('НДС с Вознаграждения Вайлдберриз');
+  const iEkv = at('Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов');
+  const iPvz = at('Возмещение за выдачу и возврат товаров на ПВЗ');
+  const N = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? 0 : n; };
+  let kom = 0, comp = 0;
+  for (let i = 1; i < out.length; i++) {
+    const r = out[i];
+    if (r[iReason] !== 'Продажа' && r[iReason] !== 'Возврат') continue;
+    const sg = r[iType] === 'Продажа' ? 1 : -1;
+    kom += sg * (N(r[iRetail]) - N(r[iPay]));
+    comp += sg * (N(r[iVV]) + N(r[iNDS]) + N(r[iEkv]) + N(r[iPvz]));
+  }
+  const gap = kom - comp;
+  if (Math.abs(gap) > Math.max(50, Math.abs(kom) * 0.01)) {
+    warn(`${fname}: тождество комиссии не сходится на ${Math.round(gap)} ₽ (kom ${Math.round(kom)} vs компоненты ${Math.round(comp)})`);
+    /* какие ещё числовые колонки есть в этом файле */
+    const sums = {};
+    for (let i = 1; i < aoa.length; i++) {
+      const raw = aoa[i];
+      aoa[0].forEach((h, j) => { const v = raw[j]; if (typeof v === 'number' && v) sums[h] = (sums[h] || 0) + v; });
+    }
+    const extra = Object.entries(sums)
+      .filter(([h]) => !HEAD.includes(h) && !/^(№|номер|срок|размер|ставка|процент|кол-во|цена|скидка|доля|рейтинг|код|штрихкод|баркод|srid|id)/i.test(h))
+      .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 12);
+    if (extra.length) {
+      warn(`   не забираемые числовые колонки этого файла (топ по сумме):`);
+      extra.forEach(([h, v]) => warn(`     ${Math.round(v).toString().padStart(12)} ₽  ${h}`));
+    }
+  }
+
   return toCSV(out);
 }
 
