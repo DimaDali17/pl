@@ -291,6 +291,14 @@ async function buildModel(textsOverride){
     const c_ekv=col(H,'Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
                      'Компенсация платежных услуг/Комиссия за интеграцию платежных сервисов',
                      'Компенсация платёжных услуг');                          /* [29] эквайринг */
+    const c_ekvtype=col(H,'Тип платежа: компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
+                          'Тип платежа: компенсация платежных услуг/Комиссия за интеграцию платежных сервисов',
+                          'Тип платежа за Эквайринг/Комиссии за организацию платежей');
+    /* Эквайринг удержан из «К перечислению» НЕ всегда:
+         «Перевыставление эквайринга», «Компенсация платёжных услуг» → удержан, входит в kom
+         «Комиссия за организацию платежа с НДС»                     → НЕ удержан, WB выставляет счёт
+       Если считать его в kom всегда — тождество kom == ВВ+НДС+эквайринг+ПВЗ рвётся. */
+    const EKV_BILLED=/комисси\S* за организацию платеж/i;
     /* ВАЖНО: ПВЗ [28] на строках Продажа/Возврат уже входит в (vykr − К перечислению),
        поэтому здесь он идёт ТОЛЬКО как компонент комиссии. Отдельные строки
        «Возмещение за выдачу…» — другие строки, они идут в dost (логистику). */
@@ -301,7 +309,7 @@ async function buildModel(textsOverride){
 
     const getOrCreate=(key,paG,d)=>map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,
       vyks:0,vykrGross:0,kPerech:0,dost:0,komp:0,
-      rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0});
+      rozn:0,vv:0,vvNds:0,ekvair:0,ekvBill:0,pvz:0});
     const getTotals=k=>totals[k]||(totals[k]={y:0,m:0,hran:0,rek:0,shtraf:0,priemka:0});
     const resolveArt=art=>{
       const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
@@ -341,7 +349,9 @@ async function buildModel(textsOverride){
         o.rozn      += sg*num(r[c_rozn])*qty;
         o.vv        += sg*num(r[c_vv]);
         o.vvNds     += sg*num(r[c_vvnds]);
-        o.ekvair    += sg*num(r[c_ekv]);
+        const ekvV=num(r[c_ekv]), ekvBilled=EKV_BILLED.test(String(c_ekvtype?(r[c_ekvtype]||''):''));
+        o.ekvair    += sg*(ekvBilled?0:ekvV);   /* удержан из выплаты */
+        o.ekvBill   += sg*(ekvBilled?ekvV:0);   /* выставлен счётом — вне kom */
         o.pvz       += sg*num(r[c_pvz]);
       }
       /* ── Логистика (доставка по артикулам) ── */
@@ -397,6 +407,7 @@ async function buildModel(textsOverride){
       const net=Math.round(o.kPerech);
       const komp=Math.round(o.komp);
       const vv=Math.round(o.vv),vvNds=Math.round(o.vvNds),ekvair=Math.round(o.ekvair),pvz=Math.round(o.pvz);
+      const ekvBill=Math.round(o.ekvBill);
       out.push({paG:o.paG,y:o.y,m:o.m,
         zaks:0,vyks:o.vyks,zakr:0,vykr,
         kom,komp,rek:0,post:0,
@@ -404,6 +415,7 @@ async function buildModel(textsOverride){
         nalog:Math.round((net+komp)*(taxFn?taxFn(o.y,o.m):0.07)),
         hran:0,dost:Math.round(o.dost),perem:0,
         /* ── детализация для «Разбор» / «Комиссия ВБ» ── */
+        ekvBill,                          /* эквайринг отдельным счётом (НЕ удержан из выплаты) */
         rozn:Math.round(o.rozn),          /* розничная цена до скидки WB */
         vv,vvNds,ekvair,pvz,              /* компоненты комиссии */
         komOther:kom-(vv+vvNds+ekvair+pvz)/* остаток (должен быть ≈0) */
