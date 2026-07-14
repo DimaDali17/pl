@@ -22,6 +22,7 @@ function rzSteps(k){
     {l:'Хранение',                 v:-k.hran,     t:'sub'},
     {l:'Налог',                    v:-k.nalog,    t:'sub'});
   if(k.perem) st.push({l:'Переменные',v:-k.perem,t:'sub'});
+  if(k.komp)  st.push({l:'Компенсации WB',v:k.komp,t:'add',n:'WB платит за брак/утерю — доход, прибавляется'});
   st.push({l:'Пр.Опер',            v:k.pribOper,  t:'res'});
   if(k.rek)     st.push({l:'Реклама',v:-k.rek,t:'sub',
                   n:k.rekWB?`из бухгалтерии; в финотчёте WB удержано ${fi(k.rekWB)} ₽`:''});
@@ -38,9 +39,10 @@ function chartWaterfall(k){
   let run=0,y=6,s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
   st.forEach(step=>{
     let x0,w,col;
-    if(step.t==='sub'){
-      const from=run; run+=step.v;              /* step.v отрицательный */
-      x0=PADL+run*sc; w=(from-run)*sc; col='var(--red)';
+    if(step.t==='sub'||step.t==='add'){
+      const from=run; run+=step.v;              /* sub: v<0 (расход) · add: v>0 (доход) */
+      x0=PADL+run*sc; w=(from-run)*sc;
+      col=(step.v>=0)?'var(--green)':'var(--red)';
     } else {
       run=step.v; x0=PADL; w=step.v*sc;
       col=(step.t==='base')?'var(--blue)':'var(--green)';
@@ -66,7 +68,7 @@ function rzStepTable(y,searchOK,months){
     +'<th>Итого</th><th title="доля от розничной цены">% розн.</th></tr></thead><tbody>';
   steps.forEach((s,i)=>{
     const cls=s.t==='res'?'total':(s.t==='base'?'rzbase':'');
-    const nm=s.t==='sub'?`<span class="rzsub">${s.l}</span>`:s.l;
+    const nm=s.t==='sub'?`<span class="rzsub">${s.l}</span>`:(s.t==='add'?`<span class="rzadd">${s.l}</span>`:s.l);
     h+=`<tr class="${cls}"${s.n?` title="${s.n}"`:''}><td>${nm}</td>`
       +perM.map(P=>`<td>${fi(P[i]?P[i].v:0)}</td>`).join('')
       +`<td>${fi(s.v)}</td><td class="hl">${totK.rozn?fp1(Math.abs(s.v)/totK.rozn):'—'}</td></tr>`;

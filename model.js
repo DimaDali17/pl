@@ -300,7 +300,7 @@ async function buildModel(textsOverride){
     const ym=d=>d.getFullYear()+'-'+(d.getMonth()+1);
 
     const getOrCreate=(key,paG,d)=>map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,
-      vyks:0,vykrGross:0,kPerech:0,dost:0,
+      vyks:0,vykrGross:0,kPerech:0,dost:0,komp:0,
       rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0});
     const getTotals=k=>totals[k]||(totals[k]={y:0,m:0,hran:0,rek:0,shtraf:0,priemka:0});
     const resolveArt=art=>{
@@ -315,7 +315,17 @@ async function buildModel(textsOverride){
       const k_ym=ym(d);
 
       /* ── Продажи / Возвраты / Компенсации ── */
-      if(reason==='Продажа'||reason==='Возврат'||reason==='Добровольная компенсация при возврате'||reason==='Компенсация ущерба'){
+      /* Компенсации: WB ПЛАТИТ продавцу (брак, утеря, подмена). Это не выручка от продажи:
+         «ВБ реализовал» = 0, комиссии нет, а «К перечислению» положительное.
+         Держать их в продажной ветке нельзя — рвётся тождество
+         kom == ВВ+НДС+эквайринг+ПВЗ (kom уходил в минус без компонент). */
+      if(reason==='Добровольная компенсация при возврате'||reason==='Компенсация ущерба'){
+        const sg=(r[c_doctype]||'').trim()==='Продажа'?1:-1;
+        const paG=art?resolveArt(art):'(Компенсации WB)';
+        const o=getOrCreate(k_ym+'|'+paG,paG,d);
+        o.komp+=sg*num(r[c_per]);
+      }
+      else if(reason==='Продажа'||reason==='Возврат'){
         if(!art)return;
         const paG=resolveArt(art);
         const o=getOrCreate(k_ym+'|'+paG,paG,d);
@@ -385,11 +395,13 @@ async function buildModel(textsOverride){
          kom == ВВ+НДС+эквайринг+ПВЗ и раздувал «нераспознано» до тысяч процентов. */
       const kom=Math.round(o.vykrGross-o.kPerech);
       const net=Math.round(o.kPerech);
+      const komp=Math.round(o.komp);
       const vv=Math.round(o.vv),vvNds=Math.round(o.vvNds),ekvair=Math.round(o.ekvair),pvz=Math.round(o.pvz);
       out.push({paG:o.paG,y:o.y,m:o.m,
         zaks:0,vyks:o.vyks,zakr:0,vykr,
-        kom,rek:0,post:0,
-        nalog:Math.round(net*(taxFn?taxFn(o.y,o.m):0.07)),
+        kom,komp,rek:0,post:0,
+        /* налог с того, что реально пришло: К перечислению + компенсации */
+        nalog:Math.round((net+komp)*(taxFn?taxFn(o.y,o.m):0.07)),
         hran:0,dost:Math.round(o.dost),perem:0,
         /* ── детализация для «Разбор» / «Комиссия ВБ» ── */
         rozn:Math.round(o.rozn),          /* розничная цена до скидки WB */
