@@ -16,7 +16,7 @@ import * as XLSX from 'xlsx';
 
 const ROOT      = process.cwd();   /* Actions запускает из корня репо; скрипт может лежать где угодно */
 const CACHE_DIR = path.join(ROOT, 'cache');
-const CACHE_VER = 'v4';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
+const CACHE_VER = 'v5';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
 const OUT_FILE  = path.join(ROOT, 'data', 'model.json');
 
 /* Только эти колонки едут дальше: 19 из 84.
@@ -130,20 +130,30 @@ function xlsxToCSV(buf, fname) {
   }
   const gap = kom - comp;
   if (Math.abs(gap) > Math.max(50, Math.abs(kom) * 0.01)) {
-    warn(`${fname}: тождество комиссии не сходится на ${Math.round(gap)} ₽ (kom ${Math.round(kom)} vs компоненты ${Math.round(comp)})`);
-    /* какие ещё числовые колонки есть в этом файле */
-    const sums = {};
-    for (let i = 1; i < aoa.length; i++) {
-      const raw = aoa[i];
-      aoa[0].forEach((h, j) => { const v = raw[j]; if (typeof v === 'number' && v) sums[h] = (sums[h] || 0) + v; });
-    }
-    const extra = Object.entries(sums)
-      .filter(([h]) => !HEAD.includes(h) && !/^(№|номер|срок|размер|ставка|процент|кол-во|цена|скидка|доля|рейтинг|код|штрихкод|баркод|srid|id)/i.test(h))
-      .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 12);
-    if (extra.length) {
-      warn(`   не забираемые числовые колонки этого файла (топ по сумме):`);
-      extra.forEach(([h, v]) => warn(`     ${Math.round(v).toString().padStart(12)} ₽  ${h}`));
-    }
+    warn(`${fname}: тождество не сходится на ${Math.round(gap)} ₽ (kom ${Math.round(kom)} vs компоненты ${Math.round(comp)})`);
+
+    /* Ищем ВИНОВНИКА: колонку, которую мы не забираем и чья знаковая сумма
+       по строкам Продажа/Возврат совпадает с расхождением. Это и есть недостающая статья. */
+    const taken = new Set(idx.filter(j => j >= 0));
+    const cand = [];
+    aoa[0].forEach((h, j) => {
+      if (taken.has(j)) return;                         /* уже забираем (в т.ч. по синониму) */
+      if (/%|№|срок|штрих|баркод|шк|chrtid|srid|^id$|номер|кол-во|количество|коэффициент/i.test(String(h))) return;
+      let sum = 0;
+      for (let i = 1; i < aoa.length; i++) {
+        const reason = aoa[i][idx[iReason]], type = aoa[i][idx[iType]];
+        if (reason !== 'Продажа' && reason !== 'Возврат') continue;
+        const v = aoa[i][j];
+        if (typeof v === 'number') sum += (type === 'Продажа' ? 1 : -1) * v;
+      }
+      if (Math.abs(sum) > 1) cand.push([h, sum, Math.abs(sum + gap)]);   /* gap отрицательный → ищем sum ≈ -gap */
+    });
+    cand.sort((a, b) => a[2] - b[2]);
+    warn(`   кандидаты (ищем сумму ≈ ${Math.round(-gap)} ₽):`);
+    cand.slice(0, 6).forEach(([h, sum, d]) => {
+      const hit = d < Math.max(5, Math.abs(gap) * 0.02) ? '  ★ СОВПАЛО' : '';
+      warn(`     ${Math.round(sum).toString().padStart(10)} ₽  ${h}${hit}`);
+    });
   }
 
   return toCSV(out);
