@@ -323,7 +323,7 @@ async function buildModel(textsOverride){
         const sg=(r[c_doctype]||'').trim()==='Продажа'?1:-1;
         const paG=art?resolveArt(art):'(Компенсации WB)';
         const o=getOrCreate(k_ym+'|'+paG,paG,d);
-        o.komp+=sg*num(r[c_per]);
+        o.komp+=sg*num(r[c_pay]);
       }
       else if(reason==='Продажа'||reason==='Возврат'){
         if(!art)return;
