@@ -158,9 +158,13 @@ function xlsxToCSV(buf, fname) {
     return -1;
   });
   const miss = WBFIN_COLS.filter((c, i) => idx[i] < 0).map(c => c[0]);
-  if (miss.length) {
-    warn(`${fname}: нет колонок → ${miss.join(' | ')}`);
-    /* подсказка: что похожее вообще есть в этом файле */
+  /* Эти колонки в старых форматах (2021–2023) законно отсутствуют — WB их не начислял
+     или держал на строках-обоснованиях. Не шумим про них, они приедут пустыми. */
+  const OK_MISSING = new Set(['Хранение','Удержания','Операции на приемке',
+    'Тип платежа: компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов']);
+  const realMiss = miss.filter(m => !OK_MISSING.has(m));
+  if (realMiss.length) {
+    warn(`${fname}: нет колонок → ${realMiss.join(' | ')}`);
     const hints = aoa[0].filter(h => /эквайр|платеж|платёж|приемк|приёмк|комисси/i.test(String(h)));
     if (hints.length) warn(`   похожие колонки в файле: ${hints.join(' | ')}`);
   }
@@ -311,19 +315,22 @@ async function buildWbfin(files, co) {
       fs.writeFileSync(cp, csv);
       miss++;
     }
-    if (csv.trim()) parts.push(csv);
+    if (csv.trim()) parts.push({ csv, name: f.name });
   }
   log(`${co}: ${mine.length} файлов (кэш ${hit}, распаковано ${miss})`);
 
-  /* шапка из первого, дальше только тела; шапки сверяем */
-  const head = parts[0].slice(0, parts[0].indexOf('\n'));
+  /* Каждый файл xlsxToCSV приводит к каноническому HEAD (19 колонок в фикс. порядке),
+     поэтому шапки идентичны by design. Тела клеим без сверки — иначе теряем файлы. */
+  const CANON = HEAD.map(esc).join(',');
   const body = [];
-  parts.forEach((p, i) => {
-    const nl = p.indexOf('\n');
-    if (p.slice(0, nl) !== head) warn(`${co}: шапка файла #${i + 1} отличается — пропущен`);
-    else if (nl >= 0) body.push(p.slice(nl + 1));
+  parts.forEach(({ csv, name }) => {
+    const nl = csv.indexOf('\n');
+    if (nl < 0) return;
+    const h = csv.slice(0, nl);
+    if (h !== CANON) { warn(`${co}: «${name}» — неканоническая шапка, пропущен. Шапка: ${h.slice(0, 200)}`); return; }
+    body.push(csv.slice(nl + 1));
   });
-  const csv = head + '\n' + body.join('\n');
+  const csv = CANON + '\n' + body.join('\n');
   log(`${co}: строк ${csv.split('\n').length - 1}, ${(Buffer.byteLength(csv) / 1e6).toFixed(1)} МБ`);
   return csv;
 }
