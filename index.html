@@ -37,8 +37,12 @@
     <div class="fitem"><label>Компания</label><select class="sel" id="fCo" onchange="switchCo(this.value)">
       <option value="EF">EF</option><option value="EZFR">EZFR</option><option value="OZON">OZON</option><option value="CONS">Консолид</option>
     </select></div>
-    <div class="fitem"><label>Год</label><select class="sel" id="fYear" onchange="render()"></select></div>
-    <div class="fitem"><label>Месяц</label><select class="sel" id="fMonth" onchange="render()"><option value="">Все</option></select></div>
+    <div class="fitem"><label>Год</label><select class="sel" id="fYear" onchange="renderMonthChips();render()"></select></div>
+    <div class="fitem" id="monthWrap"><label>Месяцы</label>
+      <div class="mchips" id="fMonths"></div>
+      <button class="b mbtn" id="mDone" onclick="monthsDone()" title="Выбрать только завершённые месяцы">✓ завершённые</button>
+      <button class="b mbtn" id="mAll" onclick="monthsAll()" title="Выбрать все месяцы">все</button>
+    </div>
     <div class="fitem"><label>Артикул</label><input class="search" id="fSearch" list="artList" placeholder="поиск…" oninput="debouncedRender()"><datalist id="artList"></datalist></div>
     <div class="fitem" id="grpWrap"><label>Срез</label><div class="ctog" id="grp">
       <button class="on" data-g="month" onclick="setGrp('month')">Месяц</button>

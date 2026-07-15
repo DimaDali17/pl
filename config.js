@@ -7,3 +7,4 @@ let CFG={...DEFAULTS};
 const MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 let M={obshiy:[],acruals:[],postR:[],years:[],loaded:false,diag:[],artByPaG:{}};
 let grpMode='month', pyOn=false, curTab='pl', curCo='EF';
+let selMonths=new Set();   /* выбранные месяцы (1..12); пусто = все */

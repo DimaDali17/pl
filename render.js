@@ -1,4 +1,31 @@
 /* ═══════════ РЕНДЕР P&L ═══════════ */
+/* ── Месяцы: мультивыбор + завершённость ── */
+function monthCompleted(y,m){
+  const n=new Date(), ny=n.getFullYear(), nm=n.getMonth()+1;
+  return (y<ny)||(y===ny&&m<nm);   /* завершён = строго раньше текущего */
+}
+function monthsWithData(y){
+  const s=new Set();
+  for(const r of M.obshiy){ if(r.y===y&&(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem)) s.add(r.m); }
+  return s;
+}
+function renderMonthChips(){
+  const y=+document.getElementById('fYear').value;
+  const has=monthsWithData(y);
+  const box=document.getElementById('fMonths'); if(!box)return;
+  let h='';
+  for(let m=1;m<=12;m++){
+    const done=monthCompleted(y,m), on=selMonths.has(m), dim=!done;
+    const cls=['mchip']; if(on)cls.push('on'); if(dim)cls.push('dim'); if(!has.has(m))cls.push('nodata');
+    h+=`<button class="${cls.join(' ')}" onclick="toggleMonth(${m})" title="${dim?'месяц не завершён':''}">${MONTHS[m-1].slice(0,3)}</button>`;
+  }
+  box.innerHTML=h;
+}
+function toggleMonth(m){ if(selMonths.has(m))selMonths.delete(m); else selMonths.add(m); renderMonthChips(); render(); }
+function monthsDone(){ const y=+document.getElementById('fYear').value; selMonths=new Set(); for(let m=1;m<=12;m++) if(monthCompleted(y,m)) selMonths.add(m); renderMonthChips(); render(); }
+function monthsAll(){ selMonths=new Set(); renderMonthChips(); render(); }
+
+
 let _t; function debouncedRender(){clearTimeout(_t);_t=setTimeout(render,250);}
 function setGrp(g){grpMode=g;document.querySelectorAll('#grp button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));render();}
 function togglePY(){pyOn=!pyOn;document.getElementById('pyBtn').classList.toggle('act',pyOn);document.getElementById('pyBtn').textContent=pyOn?'✓ прошлый год':'＋ прошлый год';render();}
@@ -7,9 +34,8 @@ function render(){
   if(!M.loaded)return;
   if(curTab!=='pl'){renderTab();return;}
   const y=+document.getElementById('fYear').value;
-  const mSel=document.getElementById('fMonth').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
-  const slicerMonths=mSel?[+mSel]:[1,2,3,4,5,6,7,8,9,10,11,12];
+  const slicerMonths=selMonths.size?[...selMonths].sort((a,b)=>a-b):[1,2,3,4,5,6,7,8,9,10,11,12];
   const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
 
   /* строки в зависимости от среза */
@@ -30,7 +56,9 @@ function render(){
       rows=dims.map(D=>({label:D,v:meas(y,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)):null}));
     }
   }
-  const tot={label:'Всего',v:meas(y,slicerMonths,searchOK),py:pyOn?meas(y-1,slicerMonths,searchOK):null};
+  /* Итог: незавершённые месяцы (текущий и будущие) в сумму НЕ входят. */
+  const totMonths=slicerMonths.filter(m=>monthCompleted(y,m));
+  const tot={label:'Всего',v:meas(y,totMonths,searchOK),py:pyOn?meas(y-1,totMonths,searchOK):null};
 
   /* max для баров */
   const mx={};COLS.filter(c=>c.bar).forEach(c=>mx[c.k]=Math.max(1,...rows.map(r=>Math.abs(r.v[c.k]))));
@@ -51,9 +79,11 @@ function render(){
     const tip=(c.k==='rek'&&v.rekEst)?' title="оценка: факт < 30 000 → подставлено 300 000"':'';
     return `<td class="${cls.trim()}"${tip}>${bar}<span class="v">${inner}</span></td>`;
   };
+  const y2=+document.getElementById('fYear').value;
   const rowHtml=(r,isTot)=>{
     const empty=!isTot&&r.v.vyks===0&&r.v.zaks===0&&r.v.vykr===0;
-    let s=`<tr class="${isTot?'total':''} ${empty?'empty':''}"><td title="${r.label}">${r.label}</td>`;
+    const incomplete=!isTot&&grpMode==='month'&&(()=>{const mi=MONTHS.indexOf(r.label)+1;return mi>0&&!monthCompleted(y2,mi);})();
+    let s=`<tr class="${isTot?'total':''} ${empty?'empty':''} ${incomplete?'incomplete':''}"><td title="${r.label}${incomplete?' — месяц не завершён, в итог не входит':''}">${r.label}${incomplete?' <span class=\'inctag\'>идёт</span>':''}</td>`;
     COLS.forEach(c=>{ s+=cell(c,r.v,false); if(pyOn)s+=cell(c,r.py,true); });
     return s+'</tr>';
   };
@@ -75,6 +105,7 @@ function render(){
   ];
   document.getElementById('kpi').innerHTML=kpi.map(k=>`<div class="mc"><div class="ml">${k.l}</div><div class="mv ${k.c||''}">${k.v}</div>${k.d?`<div class="md">${k.d}</div>`:''}</div>`).join('');
   document.getElementById('matrixTtl').textContent = grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам (заказы ≥100, остальное → Прочее)';
-  document.getElementById('matrixSub').textContent=`год ${y}${mSel?' · '+MONTHS[+mSel-1]:''}${q?' · '+q:''}`;
+  const msLbl=selMonths.size&&selMonths.size<12?' · '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'';
+  document.getElementById('matrixSub').textContent=`год ${y}${msLbl}${q?' · '+q:''}`;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
 }

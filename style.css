@@ -119,3 +119,14 @@ td span.v{position:relative;z-index:1}
 .rzsub::before{content:'−  ';color:var(--red);font-weight:700}
 .rzadd{padding-left:14px;font-weight:400;color:var(--ink2)}
 .rzadd::before{content:'+  ';color:var(--green);font-weight:700}
+/* мультивыбор месяцев */
+.mchips{display:inline-flex;flex-wrap:wrap;gap:3px}
+.mchip{padding:4px 8px;border:1px solid var(--border2);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;background:var(--bg3);color:var(--ink2)}
+.mchip.on{background:var(--ink);color:var(--bg3);border-color:var(--ink)}
+.mchip.dim{opacity:.45}
+.mchip.dim.on{background:var(--ink3);border-color:var(--ink3)}
+.mchip.nodata{opacity:.3;text-decoration:line-through}
+.mbtn{padding:4px 9px;font-size:10px}
+/* незавершённый месяц в таблице — серый, курсив */
+tbody tr.incomplete td{color:var(--ink3);font-style:italic;background:repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(160,148,128,.05) 6px,rgba(160,148,128,.05) 12px)}
+.inctag{font-size:8px;background:var(--ink3);color:var(--bg3);padding:1px 5px;border-radius:4px;font-style:normal;font-weight:700;margin-left:6px;vertical-align:middle}

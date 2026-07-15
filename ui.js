@@ -26,7 +26,7 @@ async function load(){
     applyCompany();
 
     document.getElementById('fYear').innerHTML=M.years.map(y=>`<option>${y}</option>`).join('');
-    document.getElementById('fMonth').innerHTML='<option value="">Все</option>'+MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+    monthsDone();   /* по умолчанию — только завершённые месяцы */
     refreshArtList();
 
     ph.style.display='none';
