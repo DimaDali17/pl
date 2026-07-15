@@ -15,6 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60      # страховка: зависший шаг убивается, а не висит 6 часов
     steps:
       - uses: actions/checkout@v4
 
@@ -43,15 +44,25 @@ jobs:
         run: node prebuild.mjs
 
       - name: Commit
+        env:
+          GIT_TERMINAL_PROMPT: 0          # никогда не ждать ввода
+          GIT_EDITOR: 'true'              # никаких редакторов при merge/rebase
         run: |
           git config user.name  "pl-bot"
           git config user.email "pl-bot@users.noreply.github.com"
+
+          # model.json нельзя мержить — наш всегда новее.
+          # Поэтому: отложить файл → взять свежий main → положить файл обратно.
+          cp data/model.json /tmp/model.json
+          git fetch origin main
+          git reset --hard origin/main
+          mkdir -p data
+          cp /tmp/model.json data/model.json
+
           git add data/model.json
           if git diff --staged --quiet; then
             echo "Изменений нет"
-          else
-            git commit -m "data: пересборка model.json [skip ci]"
-            # пока шла сборка, в main могли залить правки — иначе push отобьёт
-            git pull --rebase origin main
-            git push origin HEAD:main
+            exit 0
           fi
+          git commit -m "data: пересборка model.json [skip ci]"
+          git push origin HEAD:main
