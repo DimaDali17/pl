@@ -16,7 +16,7 @@ import * as XLSX from 'xlsx';
 
 const ROOT      = process.cwd();   /* Actions запускает из корня репо; скрипт может лежать где угодно */
 const CACHE_DIR = path.join(ROOT, 'cache');
-const CACHE_VER = 'v6';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
+const CACHE_VER = 'v7';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
 const OUT_FILE  = path.join(ROOT, 'data', 'model.json');
 
 /* Только эти колонки едут дальше: 19 из 84.
@@ -64,6 +64,48 @@ const WBFIN_COLS = [
 const EKV_BILLED = /комисси\S* за организацию платеж/i;
 const HEAD = WBFIN_COLS.map(c => c[0]);   /* канонические имена — шапка итогового CSV */
 
+/* ── Старый АНГЛОЯЗЫЧНЫЙ формат отчёта (файлы до ~28.01.2024) ──
+   Полностью английские заголовки И значения. Переводим в канон (рус),
+   чтобы parseWBFin работал без изменений. Пересечение с новым форматом — одна
+   колонка Srid, поэтому формат определяем по наличию английского «Subject». */
+const EN2RU_HEAD = {
+  'Subject':'Предмет',
+  "Supplier's Article":'Артикул поставщика',
+  'Document Type':'Тип документа',
+  'Reason for Payment':'Обоснование для оплаты',
+  'Sale Date':'Дата продажи',
+  'Quantity':'Кол-во',
+  'Retail Price':'Цена розничная',
+  'Wildberries Realized Goods (Pr)':'Вайлдберриз реализовал Товар (Пр)',
+  'Compensation for the issuance and return of goods at PVZ':'Возмещение за выдачу и возврат товаров на ПВЗ',
+  'Compensation for Acquiring Expenses':'Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
+  'Wildberries Reward (VV), excluding VAT':'Вознаграждение Вайлдберриз (ВВ), без НДС',
+  'VAT from Wildberries Reward':'НДС с Вознаграждения Вайлдберриз',
+  'Amount to Transfer to the Seller for the Realized Goods':'К перечислению Продавцу за реализованный Товар',
+  'Services for delivering goods to the buyer':'Услуги по доставке товара покупателю',
+  'Total Penalty Amount':'Общая сумма штрафов',
+  'Compensation for Transportation Costs':'Возмещение издержек по перевозке/по складским операциям с товаром',
+  'Storage':'Хранение', 'Storage Fee':'Хранение',
+  'Deductions':'Удержания', 'Withholdings':'Удержания',
+  'Acceptance Operations':'Операции на приемке', 'Paid Acceptance':'Платная приемка',
+};
+/* значения в колонках «Обоснование» и «Тип документа» тоже английские */
+const EN2RU_VAL = {
+  // Reason for Payment
+  'Sale':'Продажа', 'Return':'Возврат',
+  'Logistics':'Логистика', 'Storage':'Хранение', 'Deduction':'Удержание',
+  'Fine':'Штраф', 'Penalty':'Штраф',
+  'Compensation for the issuance and return of goods at PVZ':'Возмещение за выдачу и возврат товаров на ПВЗ',
+  'Compensation for Transportation Costs':'Возмещение издержек по перевозке/по складским операциям с товаром',
+  'Goods Processing':'Обработка товара', 'Acceptance':'Платная приемка',
+  'Voluntary compensation upon return':'Добровольная компенсация при возврате',
+  'Damage Compensation':'Компенсация ущерба',
+  // Document Type
+  'Sales':'Продажа', 'Returns':'Возврат',
+};
+const isEnglishFormat = header => header.some(h => norm(h) === norm('Subject')) &&
+                                  !header.some(h => norm(h) === norm('Предмет'));
+
 const norm = s => String(s ?? '').toLowerCase().replace(/[\s\u00a0]+/g, ' ').replace(/[«»"']/g, '').trim();
 
 const log  = (...a) => console.log('•', ...a);
@@ -96,6 +138,19 @@ function xlsxToCSV(buf, fname) {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: false });
   if (!aoa.length) { warn(`${fname}: пустой лист`); return ''; }
+
+  /* Старый английский формат → переводим заголовки и значения в канон (рус) */
+  if (isEnglishFormat(aoa[0])) {
+    const hdr = aoa[0].map(h => EN2RU_HEAD[String(h).trim()] || h);
+    const jReason = hdr.findIndex(h => norm(h) === norm('Обоснование для оплаты'));
+    const jType   = hdr.findIndex(h => norm(h) === norm('Тип документа'));
+    aoa[0] = hdr;
+    for (let i = 1; i < aoa.length; i++) {
+      const r = aoa[i];
+      if (jReason >= 0 && r[jReason] != null) r[jReason] = EN2RU_VAL[String(r[jReason]).trim()] || r[jReason];
+      if (jType   >= 0 && r[jType]   != null) r[jType]   = EN2RU_VAL[String(r[jType]).trim()]   || r[jType];
+    }
+  }
 
   const head = aoa[0].map(norm);
   const idx = WBFIN_COLS.map(aliases => {

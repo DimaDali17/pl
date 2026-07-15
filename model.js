@@ -205,12 +205,17 @@ async function buildModel(textsOverride){
       .forEach(g=>{ rekMP+=g.rekMP; rekBlog+=g.rekBlog; postBuh+=g.post;
         obEF.push({paG:g.paG,y:g.y,m:g.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,
           rek:g.rek,rekMP:g.rekMP,rekBlog:g.rekBlog,rekWB:0,post:g.post,nalog:0,hran:0,dost:0,perem:0}); });
-    /* заказы из report */
+    /* Заказы из report. ВАЖНО: у артикула за месяц в obEF может быть НЕСКОЛЬКО строк
+       (продажи, ПВЗ, компенсации). Раздавать месячный итог заказов в каждую — двоит.
+       Поэтому кладём заказы ОТДЕЛЬНЫМИ строками (по одной на месяц-артикул). */
     const omEF={};
     for(const r of salesEF){ if(!r.date)continue;
-      const k=r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.paG;
-      const o=omEF[k]||(omEF[k]={zaks:0,zakr:0}); o.zaks+=r.zaks; o.zakr+=r.zakr; }
-    for(const r of obEF){ const k=r.y+'-'+r.m+'|'+r.paG; if(omEF[k]){r.zaks=omEF[k].zaks; r.zakr=omEF[k].zakr;} }
+      const k=r.date.getFullYear()+'|'+(r.date.getMonth()+1)+'|'+r.paG;
+      const o=omEF[k]||(omEF[k]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zaks:0,zakr:0});
+      o.zaks+=r.zaks; o.zakr+=r.zakr; }
+    for(const o of Object.values(omEF)){
+      obEF.push({paG:o.paG,y:o.y,m:o.m,zaks:o.zaks,zakr:o.zakr,
+        vyks:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}); }
     const rekWBef=obEF.reduce((s,r)=>s+(r.rekWB||0),0);
     diag.push({name:'EF: финотчёт WB',status:noPU?'warn':'ok',rows:obEF.length,
       msg:`Реклама: площадка ${Math.round(rekMP).toLocaleString('ru-RU')} ₽ + блогеры ${Math.round(rekBlog).toLocaleString('ru-RU')} ₽`
@@ -250,16 +255,16 @@ async function buildModel(textsOverride){
         +(noPU?` · без себестоимости: ${noPU} строк с выкупами — нет пары в Расход/ШТУК EZFR`:'')});
   }
 
-  /* Если EZFR из финотчёта — заказы (zaks, zakr) берём из report2 */
+  /* Заказы EZFR из report2 — отдельными строками (та же защита от двоения, что у EF). */
   if(raw.wbfin_ezfr&&raw.wbfin_ezfr.length&&salesEZ.length){
     const orderMap={};
     for(const r of salesEZ){if(!r.date)continue;
-      const key=r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.paG;
-      const o=orderMap[key]||(orderMap[key]={zaks:0,zakr:0});
+      const key=r.date.getFullYear()+'|'+(r.date.getMonth()+1)+'|'+r.paG;
+      const o=orderMap[key]||(orderMap[key]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zaks:0,zakr:0});
       o.zaks+=r.zaks; o.zakr+=r.zakr;}
-    for(const r of obEZ){
-      const key=r.y+'-'+r.m+'|'+r.paG;
-      if(orderMap[key]){r.zaks=orderMap[key].zaks; r.zakr=orderMap[key].zakr;}}
+    for(const o of Object.values(orderMap)){
+      obEZ.push({paG:o.paG,y:o.y,m:o.m,zaks:o.zaks,zakr:o.zakr,
+        vyks:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0});}
   }
 
   /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
