@@ -3,14 +3,14 @@ const DIV=(a,b)=>b?a/b:0;
 const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
 function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0,
     rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0,komOther:0,rekWB:0,rekMP:0,rekBlog:0,komp:0,ekvBill:0};
-  for(const r of M.obshiy){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
+  for(const r of M.obshiy){ if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
     a.zaks+=r.zaks;a.zaksRep+=(r.zaksRep||0);a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem;
     /* детализация комиссии (есть только у WB-финотчёта; у EF/Ozon — 0) */
     a.komp+=(r.komp||0);a.ekvBill+=(r.ekvBill||0);
     a.rekWB+=(r.rekWB||0);a.rekMP+=(r.rekMP||0);a.rekBlog+=(r.rekBlog||0);
     a.rozn+=(r.rozn||0);a.vv+=(r.vv||0);a.vvNds+=(r.vvNds||0);a.ekvair+=(r.ekvair||0);a.pvz+=(r.pvz||0);a.komOther+=(r.komOther||0); }
   return a; }
-function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
+function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
 function postRv(y,mArr,filt){ const a=agg(y,new Set(mArr),filt); if(a.post!==0)return a.post;
   if(mArr.length===1){const pm=prevMonth(y,mArr[0]);return agg(pm.y,new Set([pm.m]),filt).post;} return a.post; }
 /* правило рекламы применимо к месяцу: с апреля 2026 И только к ЗАВЕРШЁННОМУ месяцу */

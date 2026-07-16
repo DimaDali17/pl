@@ -1,12 +1,13 @@
 /* ═══════════ РЕНДЕР P&L ═══════════ */
 /* ── Месяцы: мультивыбор + завершённость ── */
 function monthCompleted(y,m){
+  if(!y)return true;   /* «за всё время» — все месяцы полные */
   const n=new Date(), ny=n.getFullYear(), nm=n.getMonth()+1;
-  return (y<ny)||(y===ny&&m<nm);   /* завершён = строго раньше текущего */
+  return (y<ny)||(y===ny&&m<nm);
 }
 function monthsWithData(y){
   const s=new Set();
-  for(const r of M.obshiy){ if(r.y===y&&(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem)) s.add(r.m); }
+  for(const r of M.obshiy){ if((!y||r.y===y)&&(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem)) s.add(r.m); }
   return s;
 }
 function renderMonthChips(){

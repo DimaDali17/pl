@@ -75,11 +75,11 @@ const mns3=MONTHS.map(x=>x.slice(0,3));
 function renderTab(){
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
-  const mSel=document.getElementById('fMonth').value;
   const el=document.getElementById('page-'+curTab);
   const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
   const all=[1,2,3,4,5,6,7,8,9,10,11,12];
-  const sM = mSel?[+mSel]:all;
+  /* месяцы из общего мультивыбора (пусто = все) */
+  const sM = (typeof selMonths!=='undefined'&&selMonths.size)?[...selMonths].sort((a,b)=>a-b):all;
   const base=[
     {l:'Заказ,шт',t:'Заказано штук',fn:(m,f)=>fi(meas(y,m,f).zaks)},
     {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
@@ -92,7 +92,7 @@ function renderTab(){
       chartBL(mns3,rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf}));
     const cols=[
       {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
-      {l:'Выкуп,руб',t:'Выручка (К перечислению за товар)',fn:(m,f)=>fi(meas(y,m,f).vykr)},
+      {l:'Выкуп,руб',t:'Выручка (gross): «ВБ реализовал» из финотчёта — что заплатил покупатель',fn:(m,f)=>fi(meas(y,m,f).vykr)},
       {l:'Реклама',t:'Расходы на рекламу (лист расход, группа «Реклама»). Для завершённых месяцев c апр.2026: если <30 000 ₽ → 300 000 ₽ (оценка)',fn:(m,f)=>fi(meas(y,m,f).rek)},
       {l:'Рекл.ВБ',t:'Реклама на площадке: строки листа Расход, где «Конкретнее» = реклама WB / продвижение / джем',fn:(m,f)=>fi(meas(y,m,f).rekMP)},
       {l:'Блогеры',t:'Внешнее продвижение: интеграции, блогеры — всё, что в «Конкретнее» не опознано как площадка',fn:(m,f)=>fi(meas(y,m,f).rekBlog)},
