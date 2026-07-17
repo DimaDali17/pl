@@ -40,29 +40,7 @@ jobs:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
           SHEET_CSV_URLS:   ${{ secrets.SHEET_CSV_URLS }}
           WBFIN_EF:         ${{ vars.WBFIN_EF }}         # поставить "1" на приоритете 3
+          WORKER_URL:       ${{ vars.WORKER_URL }}       # https://pl-proxy.xxx.workers.dev
+          WRITE_TOKEN:      ${{ secrets.WRITE_TOKEN }}   # токен записи модели в KV
           NODE_OPTIONS: --max-old-space-size=6144
         run: node prebuild.mjs
-
-      - name: Commit
-        env:
-          GIT_TERMINAL_PROMPT: 0          # никогда не ждать ввода
-          GIT_EDITOR: 'true'              # никаких редакторов при merge/rebase
-        run: |
-          git config user.name  "pl-bot"
-          git config user.email "pl-bot@users.noreply.github.com"
-
-          # model.json нельзя мержить — наш всегда новее.
-          # Поэтому: отложить файл → взять свежий main → положить файл обратно.
-          cp data/model.json /tmp/model.json
-          git fetch origin main
-          git reset --hard origin/main
-          mkdir -p data
-          cp /tmp/model.json data/model.json
-
-          git add data/model.json
-          if git diff --staged --quiet; then
-            echo "Изменений нет"
-            exit 0
-          fi
-          git commit -m "data: пересборка model.json [skip ci]"
-          git push origin HEAD:main
