@@ -205,16 +205,15 @@ async function buildModel(textsOverride){
       .forEach(g=>{ rekMP+=g.rekMP; rekBlog+=g.rekBlog; postBuh+=g.post;
         obEF.push({paG:g.paG,y:g.y,m:g.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,
           rek:g.rek,rekMP:g.rekMP,rekBlog:g.rekBlog,rekWB:0,post:g.post,nalog:0,hran:0,dost:0,perem:0}); });
-    /* zaks (штуки заказов) теперь из финотчёта (доставки «К клиенту»).
-       Из report берём только zakr — сумму заказов в рублях (в финотчёте её нет),
-       и zaksRep — заказы report для сверки на вкладке диагностики. */
+    /* zaks и zakr теперь из финотчёта (доставки «К клиенту» × средний чек).
+       report только для сверки: zaksRep — заказы report, показываем в диагностике. */
     const omEF={};
     for(const r of salesEF){ if(!r.date)continue;
       const k=r.date.getFullYear()+'|'+(r.date.getMonth()+1)+'|'+r.paG;
-      const o=omEF[k]||(omEF[k]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zakr:0,zaksRep:0});
-      o.zakr+=r.zakr; o.zaksRep+=r.zaks; }
+      const o=omEF[k]||(omEF[k]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zaksRep:0,zakrRep:0});
+      o.zaksRep+=r.zaks; o.zakrRep+=r.zakr; }
     for(const o of Object.values(omEF)){
-      obEF.push({paG:o.paG,y:o.y,m:o.m,zaks:0,zaksRep:o.zaksRep,zakr:o.zakr,
+      obEF.push({paG:o.paG,y:o.y,m:o.m,zaks:0,zaksRep:o.zaksRep,zakrRep:o.zakrRep,zakr:0,
         vyks:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}); }
     const zaksFin=obEF.reduce((s,r)=>s+(r.zaks||0),0);
     const zaksRep=obEF.reduce((s,r)=>s+(r.zaksRep||0),0);
@@ -258,16 +257,15 @@ async function buildModel(textsOverride){
         +(noPU?` · без себестоимости: ${noPU} строк с выкупами — нет пары в Расход/ШТУК EZFR`:'')});
   }
 
-  /* Заказы EZFR — из финотчёта (parseWBFin уже посчитал zaks по доставкам «К клиенту»).
-     Из report2 берём только zakr (рубли) и zaksRep для сверки. */
+  /* Заказы EZFR (штуки и рубли) — из финотчёта. report2 только для сверки. */
   if(raw.wbfin_ezfr&&raw.wbfin_ezfr.length&&salesEZ.length){
     const orderMap={};
     for(const r of salesEZ){if(!r.date)continue;
       const key=r.date.getFullYear()+'|'+(r.date.getMonth()+1)+'|'+r.paG;
-      const o=orderMap[key]||(orderMap[key]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zakr:0,zaksRep:0});
-      o.zakr+=r.zakr; o.zaksRep+=r.zaks;}
+      const o=orderMap[key]||(orderMap[key]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zaksRep:0,zakrRep:0});
+      o.zaksRep+=r.zaks; o.zakrRep+=r.zakr;}
     for(const o of Object.values(orderMap)){
-      obEZ.push({paG:o.paG,y:o.y,m:o.m,zaks:0,zaksRep:o.zaksRep,zakr:o.zakr,
+      obEZ.push({paG:o.paG,y:o.y,m:o.m,zaks:0,zaksRep:o.zaksRep,zakrRep:o.zakrRep,zakr:0,
         vyks:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0});}
   }
 
@@ -424,8 +422,12 @@ async function buildModel(textsOverride){
       const komp=Math.round(o.komp);
       const vv=Math.round(o.vv),vvNds=Math.round(o.vvNds),ekvair=Math.round(o.ekvair),pvz=Math.round(o.pvz);
       const ekvBill=Math.round(o.ekvBill);
+      /* Заказ,руб из финотчёта: штук заказов × средняя цена выкупа (vykrGross/vyks).
+         Цены на строках логистики нет, поэтому оцениваем по среднему чеку того же артикул-месяца. */
+      const avgCena=o.vyks?o.vykrGross/o.vyks:0;
+      const zakr=Math.round(o.zaks*avgCena);
       out.push({paG:o.paG,y:o.y,m:o.m,
-        zaks:o.zaks,vyks:o.vyks,zakr:0,vykr,
+        zaks:o.zaks,vyks:o.vyks,zakr,vykr,
         kom,komp,rek:0,post:0,
         /* налог с того, что реально пришло: К перечислению + компенсации */
         nalog:Math.round((net+komp)*(taxFn?taxFn(o.y,o.m):0.07)),
