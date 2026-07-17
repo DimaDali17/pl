@@ -532,6 +532,22 @@ const out = {
   artByPaG: M.artByPaG,
   diag: M.diag,
 };
-fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
-fs.writeFileSync(OUT_FILE, JSON.stringify(out));
-log(`data/model.json — ${(fs.statSync(OUT_FILE).size / 1e6).toFixed(2)} МБ за ${((Date.now() - t0) / 1000).toFixed(1)} с`);
+const payload = JSON.stringify(out);
+
+/* Данные за паролем: модель НЕ коммитим в публичный репозиторий, а заливаем в
+   Cloudflare KV через воркер (PUT ?data=model с токеном записи). Фронт читает её
+   через воркер по паролю. */
+const WORKER_URL = process.env.WORKER_URL;   /* https://pl-proxy.xxx.workers.dev */
+const WRITE_TOKEN = process.env.WRITE_TOKEN;
+if (WORKER_URL && WRITE_TOKEN) {
+  const u = WORKER_URL.replace(/\/$/, '') + '/?data=model';
+  const r = await fetch(u, { method: 'PUT', headers: { 'X-Write-Token': WRITE_TOKEN, 'Content-Type': 'application/json' }, body: payload });
+  const txt = await r.text();
+  if (!r.ok) die(`заливка модели в воркер не удалась: HTTP ${r.status} — ${txt.slice(0, 200)}`);
+  log(`модель залита в воркер (KV): ${(payload.length / 1e6).toFixed(2)} МБ · ${txt.slice(0, 120)}`);
+} else {
+  /* локальный прогон без воркера — пишем файл как раньше */
+  fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
+  fs.writeFileSync(OUT_FILE, payload);
+  log(`data/model.json (локально) — ${(payload.length / 1e6).toFixed(2)} МБ за ${((Date.now() - t0) / 1000).toFixed(1)} с`);
+}
