@@ -16,7 +16,7 @@ import * as XLSX from 'xlsx';
 
 const ROOT      = process.cwd();   /* Actions запускает из корня репо; скрипт может лежать где угодно */
 const CACHE_DIR = path.join(ROOT, 'cache');
-const CACHE_VER = 'v7';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
+const CACHE_VER = 'v8';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
 const OUT_FILE  = path.join(ROOT, 'data', 'model.json');
 
 /* Только эти колонки едут дальше: 19 из 84.
@@ -457,10 +457,14 @@ texts.wbfin_ezfr = await buildWbfin(files, 'EZFR');
 /* EF на финотчёте WB. Отключается через WBFIN_EF=0 — откатывает EF на report+log. */
 if (process.env.WBFIN_EF !== '0') texts.wbfin_ef = await buildWbfin(files, 'EF');
 
+const nEZ = texts.wbfin_ezfr ? texts.wbfin_ezfr.split('\n').length - 1 : 0;
+const nEF = texts.wbfin_ef ? texts.wbfin_ef.split('\n').length - 1 : 0;
+log(`ФИНОТЧЁТ: EZFR ${nEZ} строк · EF ${nEF} строк`);
+
 /* Без финотчёта model.js МОЛЧА откатится на report2 и выдаст другие цифры.
    Лучше упасть, чем выложить правдоподобную неправду. */
-if (!texts.wbfin_ezfr && process.env.ALLOW_NO_WBFIN !== '1')
-  die('EZFR: финотчёт не собран (0 файлов на Диске). Модель откатилась бы на report2 и дала другие цифры.');
+if (nEZ < 10 && process.env.ALLOW_NO_WBFIN !== '1')
+  die(`EZFR: финотчёт почти пуст (${nEZ} строк). Файлы на Диске не прочитались? Проверьте папку EZFR и сервисный аккаунт.`);
 
 const M = await runModel(texts);
 
