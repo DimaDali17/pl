@@ -125,10 +125,13 @@ async function buildModel(textsOverride){
   acGroup.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');acByYM[k]=(acByYM[k]||0)+r.acr;});
   const acTotal=acGroup.reduce((s,r)=>s+r.acr,0);
   const acMonths=Object.entries(acByYM).sort().map(([k,v])=>`${k}:${Math.round(v).toLocaleString('ru-RU')}`).join(' · ');
+  /* сырой образец: что реально лежит в колонке даты (ловит формат published-CSV) */
+  const acSample=raw.acr.slice(0,3).map(r=>JSON.stringify(r[ac_d])).join(', ');
   diag.push({name:'Акруалс (лист Acruals)',status:acDated<acRaw*0.9?'warn':'ok',rows:acRaw,
-    msg:`строк в CSV: ${acRaw} · с датой: ${acDated} · Σ ${Math.round(acTotal).toLocaleString('ru-RU')} ₽`
-      +(acDated<acRaw?` · ⚠ ${acRaw-acDated} строк без валидной даты`:'')
-      +` · по месяцам: ${acMonths}`});
+    msg:`строк: ${acRaw} · с датой: ${acDated} · Σ ${Math.round(acTotal).toLocaleString('ru-RU')} ₽`
+      +` · колонка даты: ${JSON.stringify(ac_d)} · образец: [${acSample}]`
+      +(acDated<acRaw?` · ⚠ ${acRaw-acDated} без даты`:'')
+      +(acMonths?` · по месяцам: ${acMonths}`:'')});
 
   function parseSales(rr,taxFlat){
     if(!rr||!rr.length)return[]; const H=rr._headers;
