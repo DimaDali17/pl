@@ -539,15 +539,14 @@ const payload = JSON.stringify(out);
    через воркер по паролю. */
 const WORKER_URL = process.env.WORKER_URL;   /* https://pl-proxy.xxx.workers.dev */
 const WRITE_TOKEN = process.env.WRITE_TOKEN;
+log(`ЗАЛИВКА: WORKER_URL=${WORKER_URL ? 'задан ('+WORKER_URL+')' : 'ПУСТО'} · WRITE_TOKEN=${WRITE_TOKEN ? 'задан ('+WRITE_TOKEN.length+' симв)' : 'ПУСТО'}`);
 if (WORKER_URL && WRITE_TOKEN) {
   const u = WORKER_URL.replace(/\/$/, '') + '/?data=model';
+  log(`заливаю модель в ${u} …`);
   const r = await fetch(u, { method: 'PUT', headers: { 'X-Write-Token': WRITE_TOKEN, 'Content-Type': 'application/json' }, body: payload });
   const txt = await r.text();
-  if (!r.ok) die(`заливка модели в воркер не удалась: HTTP ${r.status} — ${txt.slice(0, 200)}`);
-  log(`модель залита в воркер (KV): ${(payload.length / 1e6).toFixed(2)} МБ · ${txt.slice(0, 120)}`);
+  if (!r.ok) die(`заливка модели не удалась: HTTP ${r.status} — ${txt.slice(0, 300)}`);
+  log(`✓ модель залита в воркер (KV): ${(payload.length / 1e6).toFixed(2)} МБ · ответ: ${txt.slice(0, 150)}`);
 } else {
-  /* локальный прогон без воркера — пишем файл как раньше */
-  fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
-  fs.writeFileSync(OUT_FILE, payload);
-  log(`data/model.json (локально) — ${(payload.length / 1e6).toFixed(2)} МБ за ${((Date.now() - t0) / 1000).toFixed(1)} с`);
+  die('WORKER_URL или WRITE_TOKEN не заданы — модель некуда заливать. Проверьте, что build.yml их пробрасывает и переменные добавлены в GitHub.');
 }
