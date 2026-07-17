@@ -118,6 +118,17 @@ async function buildModel(textsOverride){
   const ac_d=col(acH,'Дата'),ac_pa=col(acH,'Предмет;Артикул.Глубина','Предмет;Артикул продавца'),ac_v=col(acH,'Акруалс');
   const acGroup=groupBy(raw.acr.map(r=>({date:pdate(r[ac_d]),paG:(r[ac_pa]||'').trim(),acr:intn(r[ac_v])})).filter(r=>r.date),
     r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,acr:sum(rs,'acr')}));
+  /* Диагностика: сколько строк акруалса дошло и на какую сумму — ловит обрезку CSV */
+  const acRaw=raw.acr.length;
+  const acDated=raw.acr.map(r=>pdate(r[ac_d])).filter(Boolean).length;
+  const acByYM={};
+  acGroup.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');acByYM[k]=(acByYM[k]||0)+r.acr;});
+  const acTotal=acGroup.reduce((s,r)=>s+r.acr,0);
+  const acMonths=Object.entries(acByYM).sort().map(([k,v])=>`${k}:${Math.round(v).toLocaleString('ru-RU')}`).join(' · ');
+  diag.push({name:'Акруалс (лист Acruals)',status:acDated<acRaw*0.9?'warn':'ok',rows:acRaw,
+    msg:`строк в CSV: ${acRaw} · с датой: ${acDated} · Σ ${Math.round(acTotal).toLocaleString('ru-RU')} ₽`
+      +(acDated<acRaw?` · ⚠ ${acRaw-acDated} строк без валидной даты`:'')
+      +` · по месяцам: ${acMonths}`});
 
   function parseSales(rr,taxFlat){
     if(!rr||!rr.length)return[]; const H=rr._headers;
