@@ -27,6 +27,8 @@ function pdate(v){ if(v instanceof Date)return v; if(v==null)return null;
   else if(m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))d=new Date(+m[1],+m[2]-1,+m[3]);
   else if(m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/))d=new Date(+m[3],+m[2]-1,+m[1]);
   else if(m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)){let a=+m[1],b=+m[2]; d=a>12?new Date(+m[3],b-1,a):new Date(+m[3],a-1,b);}
+  else if(/^\d{5}(\.\d+)?$/.test(s)){ /* серийный номер даты Excel/Google Sheets (published-CSV) */
+    const n=parseFloat(s); if(n>=20000&&n<=80000){ d=new Date(Date.UTC(1899,11,30)+Math.round(n)*86400000); } else d=null; }
   else { const t=new Date(s); d=isNaN(t)?null:t; }
   if(!d||isNaN(d))return null; const y=d.getFullYear(); if(y<2015||y>2100)return null; return d;
 }
