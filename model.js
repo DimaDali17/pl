@@ -46,14 +46,36 @@ async function buildModel(textsOverride){
     diag.push({name:k,status:(raw[k].length?'ok':(need?'err':'warn')),rows:raw[k].length,cols:(raw[k]._headers||[]).length}); });
   if(!raw.report.length||!raw.rashod.length) throw new Error('Не пришли обязательные листы (report/расход). Проверьте пароль и секреты воркера.');
 
-  /* Артикул dim */
-  const aH=raw.art._headers||[];
-  const c_pred=col(aH,'Предмет'),c_post=col(aH,'Артикул поставщика'),c_glub=col(aH,'Артикул.Глубина','Артикул Глубина'),c_new=col(aH,'Предмет_Новый','Предмет;Новый'),c_scep=col(aH,'Сцепка','Сцепка2');
+  /* ═══ Артикул dim — читаем ПОЗИЦИОННО ═══
+     На листе справочника колонка «Предмет» встречается ДВАЖДЫ: настоящая (индекс 1)
+     и служебная в соседней вспомогательной таблице (индекс 6, рядом с «Что»/списком
+     предметов). Объектное представление схлопывает одноимённые колонки, и предмет
+     мог браться из служебной — отсюда «Проценты», «Вешалки-плечики», «Капоры»
+     в качестве предметов. Берём ПЕРВОЕ вхождение каждой колонки по индексу. */
+  const artPos=(function(){
+    const rows=parseCSV(texts.art||'');
+    if(!rows.length)return{rows:[],idx:{},H:[]};
+    const H=rows[0].map(x=>String(x==null?'':x).trim());
+    const find=(...res)=>{ for(const re of res){ for(let i=0;i<H.length;i++){ if(re.test(H[i]))return i; } } return -1; };
+    const idx={
+      pred:find(/^Предмет$/i),
+      post:find(/^Артикул\s*поставщика$/i,/Артикул\s*поставщика/i),
+      glub:find(/^Артикул[.\s]*Глубина$/i,/Артикул[.\s]*Глубина/i),
+      pnew:find(/^Предмет[_;]\s*Новый$/i),
+      scep:find(/^Сцепка$/i,/^Сцепка/i)
+    };
+    const g=(r,i)=>i>=0?String(r[i]==null?'':r[i]).trim():'';
+    return {H,idx,rows:rows.slice(1).map(r=>({
+      predmet:g(r,idx.pred),post:g(r,idx.post),glub:g(r,idx.glub),
+      pnew:g(r,idx.pnew),scep:g(r,idx.scep)}))};
+  })();
+  const c_pred=artPos.H[artPos.idx.pred]||'Предмет',c_post=artPos.H[artPos.idx.post]||'—',
+        c_glub=artPos.H[artPos.idx.glub]||'—',c_scep=artPos.H[artPos.idx.scep]||'—';
   const artDim=[]; const artByPostL=new Map(), artByPostA=new Map(); const artByPredArt=new Map();
   let predEmpty=0;
-  raw.art.forEach(r=>{
-    let predmet=(r[c_pred]||'').trim(); const post=(r[c_post]||'').trim(),glub=(r[c_glub]||'').trim(),pnew=c_new?(r[c_new]||'').trim():'';
-    const scep=c_scep?(r[c_scep]||'').trim():'';
+  artPos.rows.forEach(r=>{
+    let predmet=r.predmet; const post=r.post,glub=r.glub,pnew=r.pnew;
+    const scep=r.scep;
     let predSrc=predmet?'колонка Предмет':'';
     /* если «Предмет» пуст — восстановим из «Сцепка» (Сцепка = Предмет+Артикул поставщика) */
     if(!predmet&&scep&&post&&scep.length>post.length&&nk(scep).endsWith(nk(post))){
@@ -76,7 +98,7 @@ async function buildModel(textsOverride){
   /* Диагностика справочника: заголовки с индексами, дубли имён и «залипшие» значения
      глубины. Если один и тот же артикул стоит глубиной у многих предметов — колонка
      читается не та (лист с блоками рядом + схлопывание одинаковых заголовков). */
-  {const aH2=(raw.art._headers||[]).map(h=>String(h==null?'':h).trim());
+  {const aH2=artPos.H.slice();
    const cnt={}; aH2.forEach(h=>{ if(h)cnt[h]=(cnt[h]||0)+1; });
    const dup=Object.keys(cnt).filter(k=>cnt[k]>1);
    const gc={},pc={};
@@ -86,8 +108,8 @@ async function buildModel(textsOverride){
    const bad=gTop&&gc[gTop]>3;
    diag.push({name:'Справочник: колонки',status:(dup.length||bad)?'warn':'ok',rows:artDim.length,
      msg:`заголовки: ${aH2.map((h,i)=>i+':'+(h||'—')).join(' | ')}`
-       +` ‖ выбрано: Предмет=${JSON.stringify(c_pred)} · Артикул поставщика=${JSON.stringify(c_post)}`
-       +` · Артикул.Глубина=${JSON.stringify(c_glub)} · Сцепка=${JSON.stringify(c_scep)}`
+       +` ‖ выбрано ПОЗИЦИОННО: Предмет[${artPos.idx.pred}] · Артикул поставщика[${artPos.idx.post}]`
+       +` · Артикул.Глубина[${artPos.idx.glub}] · Сцепка[${artPos.idx.scep}]`
        +(dup.length?` ‖ ⚠ ДУБЛИ ИМЁН: ${dup.join(', ')}`:'')
        +` ‖ частые значения глубины: ${top(gc)||'—'}`
        +` ‖ частые артикулы поставщика: ${top(pc)||'—'}`
@@ -995,17 +1017,25 @@ async function buildModel(textsOverride){
        НАЛОГ      = с базы «Выручка + Баллы + Партнёры» (баллы — доход продавца),
                     а НЕ с Выкуп,руб. В этом отличие Ozon от WB. */
     const vals=Object.values(map);
-    const T={sales:0,bonus:0,ret:0,partner:0,kom:0,komReal:0,vykr:0,tax:0};
+    const T={sales:0,bonus:0,ret:0,partner:0,kom:0,komReal:0,vykr:0,tax:0}; const TY={};
     const out=vals.map(o=>{
-        const vykr=Math.round(o.salesRub+o.returnRub);          /* деньги клиента */
-        const rozn=Math.round(o.salesRub+o.bonusRub+o.returnRub+o.partnerRub); /* цена продавца */
-        const comp=Math.round(o.bonusRub+o.partnerRub);         /* компенсации площадки */
+        /* ВЫКУП,РУБ = цена продавца = Выручка + Баллы за скидки + Программы партнёров.
+           Это сумма, с которой Ozon берёт вознаграждение, и она же приходит продавцу
+           до удержания комиссии. Раньше я брал только «деньги клиента» (без баллов) —
+           тогда комиссия математически обязана уходить в минус, потому что баллы
+           больше вознаграждения. Отрицательная комиссия — не факт, а следствие
+           выбора знаменателя, поэтому знаменатель приведён к базе комиссии. */
+        const vykr=Math.round(o.salesRub+o.bonusRub+o.returnRub+o.partnerRub);
+        const cash=Math.round(o.salesRub+o.returnRub);          /* только живые деньги — для «Разбор» */
+        const rozn=vykr;
+        const comp=Math.round(o.bonusRub+o.partnerRub);
         const komNom=Math.round(-o.kom);                        /* вознаграждение Ozon */
-        const kom=komNom-comp;                                  /* реальная комиссия */
-        const taxBase=Math.round(o.salesRub+o.bonusRub+o.returnRub+o.partnerRub);
+        const kom=komNom;                                       /* комиссия = вознаграждение, без вычета баллов */
+        const taxBase=vykr;
         const price=o.salesQty?vykr/o.salesQty:0;
         T.sales+=o.salesRub; T.bonus+=o.bonusRub; T.ret+=o.returnRub; T.partner+=o.partnerRub;
-        T.kom+=komNom; T.komReal+=kom; T.vykr+=vykr; T.tax+=taxBase;
+        T.kom+=komNom; T.komReal+=komNom-comp; T.vykr+=vykr; T.tax+=taxBase;
+        const b=TY[o.y]||(TY[o.y]={s:0,b:0,k:0,v:0}); b.s+=o.salesRub; b.b+=o.bonusRub; b.k+=komNom; b.v+=vykr;
         return{
             paG:o.paG,y:o.y,m:o.m,
             zaks:o.orderQty,
@@ -1014,7 +1044,7 @@ async function buildModel(textsOverride){
             vykr,
             kom,
             komNom,                    /* номинальное вознаграждение Ozon (для «Разбор») */
-            rozn,                      /* полная цена продавца = выручка + баллы (аналог «Цена розничная») */
+            rozn, cash,                /* rozn = цена продавца · cash = только деньги клиента */
             komp:Math.round(o.komp),   /* компенсации/декомпенсации Ozon */
             bonus:Math.round(o.bonusRub),
             partner:Math.round(o.partnerRub),
@@ -1032,9 +1062,14 @@ async function buildModel(textsOverride){
       msg:`Выручка ${r0(T.sales)} · Баллы ${r0(T.bonus)} · Возврат ${r0(T.ret)} · Партнёры ${r0(T.partner)}`
         +` → Выкуп,руб (деньги клиента) ${r0(T.vykr)}`
         +` · Ком.МП номинальная ${r0(T.kom)} (${T.tax?(T.kom/T.tax*100).toFixed(1):'—'}% от базы «выручка+баллы»)`
-        +` · РЕАЛЬНАЯ ${r0(T.komReal)} (${T.vykr?(T.komReal/T.vykr*100).toFixed(1):'—'}% от денег клиента)`
+        +` · если вычесть баллы: ${r0(T.komReal)} (справочно, в P&L НЕ используется)`
         +` · база налога ${r0(T.tax)}`
         });
+    diag.push({name:'Ozon: по годам',status:'ok',rows:0,
+      msg:Object.keys(TY).sort().map(y=>{const b=TY[y];
+        return `${y}: выкуп ${r0(b.v)} · баллы ${b.v?(b.b/b.v*100).toFixed(0):'—'}%`
+          +` · комиссия ${r0(b.k)} = ${b.v?(b.k/b.v*100).toFixed(1):'—'}%`;}).join(' │ ')
+        +' ║ если % комиссии сильно скачет между годами — в выгрузке не хватает строк «Вознаграждение за продажу»'});
     const unkKeys=Object.keys(ozUnk).sort((a,b)=>Math.abs(ozUnk[b])-Math.abs(ozUnk[a]));
     diag.push({name:'Ozon: типы по фолбэку',status:unkKeys.length?'warn':'ok',rows:unkKeys.length,
       msg:unkKeys.length?`разнесены по ГРУППЕ услуг (раньше терялись): `
