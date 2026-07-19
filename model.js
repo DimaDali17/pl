@@ -467,6 +467,8 @@ async function buildModel(textsOverride){
     /* Признак старого формата — по отсутствию колонки видов логистики */
     const oldFmt=!c_logType;
     let zaksFallback=0;
+    /* Счётчики отброшенных строк — ловят систематическую недостачу выкупов */
+    const skip={noDate:0,noArt:0,noArtQty:0,saleQty:0,retQty:0,otherReason:{}};
 
     const map={};
     const totals={}; /* хранение и удержания без артикула — по месяцам */
@@ -485,7 +487,9 @@ async function buildModel(textsOverride){
     };
 
     rr.forEach(r=>{
-      const d=pdate(r[c_date]); if(!d)return;
+      const d=pdate(r[c_date]);
+      if(!d){ const rs0=(r[c_reason]||'').trim();
+        if(rs0==='Продажа'||rs0==='Возврат'){skip.noDate+=intn(r[c_qty]);} return; }
       const reason=(r[c_reason]||'').trim();
       const art=(r[c_art]||'').trim();
       const pred=c_pred?(r[c_pred]||'').trim():'';
@@ -503,7 +507,9 @@ async function buildModel(textsOverride){
         o.komp+=sg*num(r[c_pay]);
       }
       else if(reason==='Продажа'||reason==='Возврат'){
-        if(!art)return;
+        const isSale0=(r[c_doctype]||'').trim()==='Продажа';
+        if(isSale0)skip.saleQty+=intn(r[c_qty]); else skip.retQty+=intn(r[c_qty]);
+        if(!art){skip.noArt++;skip.noArtQty+=intn(r[c_qty]);return;}
         const paG=resolveArt(art,pred);
         const o=getOrCreate(k_ym+'|'+paG,paG,d);
         const qty=intn(r[c_qty]);
@@ -598,6 +604,11 @@ async function buildModel(textsOverride){
       msg:Object.keys(byY).sort().map(y=>{const b=byY[y];
         return `${y}: ком ${b.g?(((b.g-b.p)/b.g)*100).toFixed(1):'—'}% · строк ${b.n}`
           +` · gross без net: ${b.z} · net>gross: ${b.neg}`;}).join(' │ ')});
+    diag.push({name:'Финотчёт: потери выкупов',status:(skip.noDate||skip.noArt)?'warn':'ok',rows:0,
+      msg:`Продажа ${skip.saleQty.toLocaleString('ru-RU')} шт − Возврат ${skip.retQty.toLocaleString('ru-RU')} шт`
+        +` = нетто ${(skip.saleQty-skip.retQty).toLocaleString('ru-RU')} шт`
+        +` · отброшено: без даты продажи ${skip.noDate.toLocaleString('ru-RU')} шт`
+        +` · без артикула ${skip.noArtQty.toLocaleString('ru-RU')} шт (${skip.noArt} строк)`});
     /* Диагностика видов логистики: какие формулировки реально встречаются */
     if(c_logType){
       const lt={};
