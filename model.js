@@ -276,6 +276,36 @@ async function buildModel(textsOverride){
           rek:g.rek,rekMP:g.rekMP,rekBlog:g.rekBlog,rekWB:0,post:g.post,nalog:0,hran:0,dost:0,perem:0}); });
     /* Заказы: финотчёт → report → доставки (см. fixOrders) */
     fixOrders(obEF,salesEF,'EF');
+    /* ── Хранение: добор из листа «Лог+Хран» ──
+       До ~2024 ВБ не включал хранение в финотчёт (обоснования «Хранение» там нет),
+       поэтому за те годы колонка ХРАНЕН выходила нулевой, а прибыль — завышенной.
+       Берём хранение из листа log ТОЛЬКО за месяцы, где финотчёт его не дал,
+       чтобы не задвоить 2025–2026. Доставку не трогаем: её финотчёт даёт всегда. */
+    {
+      const logG=parseLog(raw.log);
+      const finH={}; obEF.forEach(r=>{ if(r.hran) finH[r.y+'|'+r.m]=1; });
+      let addH=0,addM={};
+      logG.forEach(r=>{
+        const y=r.date.getFullYear(),m=r.date.getMonth()+1;
+        if(finH[y+'|'+m]||!r.hran)return;
+        addH+=r.hran; addM[y]=(addM[y]||0)+r.hran;
+        obEF.push({paG:r.paG,y,m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,
+          rek:0,post:0,nalog:0,hran:r.hran,dost:0,perem:0});
+      });
+      diag.push({name:'Хранение: добор из «Лог+Хран»',status:addH?'warn':'ok',rows:logG.length,
+        msg:(addH?`добрано ${Math.round(addH).toLocaleString('ru-RU')} ₽ за месяцы без хранения в финотчёте`
+                 :'добирать нечего — финотчёт закрывает все месяцы')
+          +(Object.keys(addM).length?` · по годам: ${Object.keys(addM).sort().map(y=>y+':'+Math.round(addM[y]).toLocaleString('ru-RU')).join(' · ')}`:'')});
+    }
+    /* Себестоимость: где её не нашли — разрез по годам (переменные там занижены) */
+    {
+      const noY={};
+      obEF.forEach(r=>{ if(r.vyks>0&&!r.perem){ const b=noY[r.y]||(noY[r.y]={n:0,v:0}); b.n++; b.v+=r.vyks; noY[r.y]=b; } });
+      const ks=Object.keys(noY).sort();
+      diag.push({name:'Без себестоимости: по годам',status:ks.length?'warn':'ok',rows:0,
+        msg:ks.length?ks.map(y=>`${y}: ${noY[y].n} строк / ${noY[y].v.toLocaleString('ru-RU')} шт`).join(' │ ')
+                     :'себестоимость найдена везде'});
+    }
     const zaksFin=obEF.reduce((s,r)=>s+(r.zaks||0),0);
     const zaksRep=obEF.reduce((s,r)=>s+(r.zaksRep||0),0);
     const rekWBef=obEF.reduce((s,r)=>s+(r.rekWB||0),0);
