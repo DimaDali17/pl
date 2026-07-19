@@ -54,16 +54,17 @@ async function buildModel(textsOverride){
   raw.art.forEach(r=>{
     let predmet=(r[c_pred]||'').trim(); const post=(r[c_post]||'').trim(),glub=(r[c_glub]||'').trim(),pnew=c_new?(r[c_new]||'').trim():'';
     const scep=c_scep?(r[c_scep]||'').trim():'';
+    let predSrc=predmet?'колонка Предмет':'';
     /* если «Предмет» пуст — восстановим из «Сцепка» (Сцепка = Предмет+Артикул поставщика) */
     if(!predmet&&scep&&post&&scep.length>post.length&&nk(scep).endsWith(nk(post))){
       let cut=scep.length; const npost=nk(post); let acc='';
       for(let i=scep.length-1;i>=0;i--){ acc=nk(scep[i])+acc; cut=i; if(acc===npost)break; }
-      predmet=scep.slice(0,cut).trim();
+      predmet=scep.slice(0,cut).trim(); predSrc='Сцепка';
     }
-    if(!predmet&&scep&&glub&&nk(scep).endsWith(nk(glub))){ predmet=scep.slice(0,scep.length-glub.length).trim(); }
+    if(!predmet&&scep&&glub&&nk(scep).endsWith(nk(glub))){ predmet=scep.slice(0,scep.length-glub.length).trim(); predSrc='Сцепка'; }
     if(!predmet)predEmpty++;
     const paG=predmet+glub, paP=predmet+post; if(paP===''||paP===';')return;
-    const rec={predmet,post,glub,pnew:pnew||predmet,paG,paP,scep}; artDim.push(rec);
+    const rec={predmet,post,glub,pnew:pnew||predmet,paG,paP,scep,predSrc}; artDim.push(rec);
     if(post){ artByPostL.set(lnk(post),rec); artByPostA.set(nk(post),rec); }
     artByPredArt.set(nk(predmet)+'|'+nk(post),rec);
   });
@@ -148,25 +149,41 @@ async function buildModel(textsOverride){
     for(let i=0;i<artSuffix.length;i++){ const a=artSuffix[i][0]; if(a.length>2&&n.endsWith(a))return artSuffix[i][1]; }
     return null;
   }
-  function glubKey(sv){ const r=recOf(sv); if(!r)return ''; return nk(r.glub||r.post||''); }
+  /* Глубинный ключ записи справочника:
+       есть Артикул.Глубина  → она (TB21white и TB21black → TB21black)
+       глубины нет           → сам ПРЕДМЕТ («Боди», «Водолазки» — бухгалтерия по предмету)
+       нет и предмета        → артикул поставщика (последняя соломинка) */
+  const deepKey=r=>r?(nk(r.glub||'')||nk(r.predmet||'')||nk(r.post||'')):'';
+  function glubKey(sv){ return deepKey(recOf(sv)); }
   /* ── Канонический ключ строки P&L ──
      Одна глубина = одна строка. TB21white и TB21black схлопываются в TB21black.
      Предмет берём ПЕРВЫЙ по справочнику для этой глубины: у ВБ один и тот же
      артикул приходит под разными предметами («Бюстгальтеры», «Колготки», «Капоры»
      для essбандалеткибеж), и без канона строка рассыпалась на шесть. */
   const glubCanon=new Map();
-  [].concat(artDim,artDim2).forEach(a=>{ const g=nk(a.glub||a.post||'');
+  [].concat(artDim,artDim2).forEach(a=>{ const g=deepKey(a);
     if(g&&!glubCanon.has(g))glubCanon.set(g,a); });
-  const canonOf=rec=>{ if(!rec)return rec; const g=nk(rec.glub||rec.post||'');
+  const canonOf=rec=>{ if(!rec)return rec; const g=deepKey(rec);
     return (g&&glubCanon.get(g))||rec; };
   {const multi=new Map();
-   [].concat(artDim,artDim2).forEach(a=>{ const g=nk(a.glub||a.post||''); if(!g)return;
+   [].concat(artDim,artDim2).forEach(a=>{ const g=deepKey(a); if(!g)return;
      if(!multi.has(g))multi.set(g,new Set()); multi.get(g).add(a.predmet); });
    const bad=[...multi.entries()].filter(([g,st])=>st.size>1);
+   /* откуда взялся предмет: из колонки «Предмет» или восстановлен из «Сцепки» */
+   const srcCnt={};
+   [].concat(artDim,artDim2).forEach(a=>{ const k=a.predSrc||'—'; srcCnt[k]=(srcCnt[k]||0)+1; });
+   const detail=bad.slice(0,4).map(([g,st])=>{
+     const rows=[].concat(artDim,artDim2).filter(a=>deepKey(a)===g);
+     const win=glubCanon.get(g);
+     return `«${g}»: ${rows.map(a=>`${a.predmet}[${a.predSrc||'—'}]`).slice(0,6).join(' / ')}`
+       +` → оставлен «${win?win.predmet:''}»`;
+   }).join(' ║ ');
+   const noGlub=[].concat(artDim,artDim2).filter(a=>!nk(a.glub||'')).length;
    diag.push({name:'Глубина: разные предметы',status:bad.length?'warn':'ok',rows:bad.length,
-     msg:bad.length?`глубин с несколькими предметами: ${bad.length} · схлопнуты в один ключ · `
-           +bad.slice(0,6).map(([g,st])=>`«${g}» → ${[...st].slice(0,4).join(' / ')}`).join(' · ')
-         :'у каждой глубины один предмет'});}
+     msg:(bad.length?`глубин с несколькими предметами: ${bad.length} (схлопнуты в один ключ) · `+detail
+                    :'у каждой глубины один предмет')
+       +` ║ без Артикул.Глубина (ключ = предмет): ${noGlub}`
+       +` ║ источник предмета: ${Object.entries(srcCnt).map(([k,v])=>k+': '+v).join(' · ')}`});}
 
   /* ═══════ Мультикомпанийность: EF (report) · EZFR (report2) · OZON · Консолид ═══════ */
   /* Расход построчно. Пост.расходы и Реклама выделяются, остальное — переменные.
