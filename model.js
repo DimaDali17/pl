@@ -88,6 +88,34 @@ async function buildModel(textsOverride){
     diag.push({name:'Артикул EZFR (art2)',status:'ok',rows:artDim2.length,msg:'своя бухгалтерия EZFR'});
   }
 
+  /* ═══════ УМНАЯ СЦЕПКА ═══════
+     Любое написание «Предмет+Артикул» → канонический paG из справочника.
+     Порядок попыток:
+       1) точное совпадение сцепки без регистра/пробелов (paP / paG / Сцепка)
+       2) хвост строки == артикул поставщика или Артикул.Глубина (длинный выигрывает)
+     resolvePA(s)      → если не нашли, вернёт исходную строку
+     resolvePA(s,'')   → если не нашли, вернёт '' (для финотчёта) */
+  const artKeyIndex=new Map(), artSuffix=[];
+  [].concat(artDim,artDim2).forEach(a=>{
+    [a.paP,a.paG,a.scep].forEach(k=>{ if(k){ const n=nk(k); if(n&&!artKeyIndex.has(n))artKeyIndex.set(n,a); } });
+    if(a.post){ const n=nk(a.post); if(n)artSuffix.push([n,a]); }
+    if(a.glub){ const n=nk(a.glub); if(n)artSuffix.push([n,a]); }
+  });
+  artSuffix.sort((x,y)=>y[0].length-x[0].length);   /* длинный артикул выигрывает */
+  function resolvePA(s,fallback){
+    const rawS=String(s==null?'':s).trim();
+    if(!rawS) return fallback===undefined?'':fallback;
+    const n=nk(rawS);
+    const rec=artKeyIndex.get(n);
+    if(rec) return rec.paG;
+    for(let i=0;i<artSuffix.length;i++){
+      const art=artSuffix[i][0];
+      if(art.length>2&&n.endsWith(art)) return artSuffix[i][1].paG;
+    }
+    return fallback===undefined?rawS:fallback;
+  }
+  const isResolved=p=>artKeyIndex.has(nk(p));
+
   /* ═══════ Мультикомпанийность: EF (report) · EZFR (report2) · OZON · Консолид ═══════ */
   /* Расход построчно. Пост.расходы и Реклама выделяются, остальное — переменные.
      Реклама делится на ДВА вида по колонке «Конкретнее»:
@@ -108,15 +136,33 @@ async function buildModel(textsOverride){
       const rekMP=(isRek&&RE_MP.test(kon))?s:0;
       const rekBlog=isRek?s-rekMP:0;
       const post=isPost?s:0;
-      return {date:pdate(r[x_date]),pa:(r[x_pa]||'').trim(),kon,rek,rekMP,rekBlog,post,per:s-rek-post}; }).filter(r=>r.date);
+      /* умная сцепка: приводим ключ расхода к канону справочника */
+      return {date:pdate(r[x_date]),pa:resolvePA(r[x_pa]),kon,rek,rekMP,rekBlog,post,per:s-rek-post}; }).filter(r=>r.date);
   }
   const xRows =parseRashod(raw.rashod);
   const xRows2=parseRashod(raw.rashod2);   /* своя бухгалтерия EZFR */
 
-  /* Acruals (общий, на EF) */
+  /* Диагностика постоянных: теперь они идут ТОЛЬКО из Расход/Расход2, поартикульно.
+     Отдельный лист «Пост» больше не используется — он давал строки без предмета
+     и задваивал суммы, которые уже есть в Расход («Что» = «Пост расходы»). */
+  const postRows =xRows.filter(r=>r.post);
+  const postRows2=xRows2.filter(r=>r.post);
+  const postNoArt =postRows.filter(r=>!isResolved(r.pa)).reduce((s,r)=>s+r.post,0);
+  diag.push({name:'Пост.расходы (из Расход)',status:postNoArt?'warn':'ok',rows:postRows.length+postRows2.length,
+    msg:`EF: ${Math.round(postRows.reduce((s,r)=>s+r.post,0)).toLocaleString('ru-RU')} ₽ · EZFR: ${Math.round(postRows2.reduce((s,r)=>s+r.post,0)).toLocaleString('ru-RU')} ₽`
+      +(postNoArt?` · ⚠ без узнанного артикула: ${Math.round(postNoArt).toLocaleString('ru-RU')} ₽`:'')
+      +` · лист «Пост» не используется`});
+
+  /* Acruals (общий, на EF) — ключ через умную сцепку */
   const acH=raw.acr._headers||[];
   const ac_d=col(acH,'Дата'),ac_pa=col(acH,'Предмет;Артикул.Глубина','Предмет;Артикул продавца'),ac_v=col(acH,'Акруалс');
-  const acGroup=groupBy(raw.acr.map(r=>({date:pdate(r[ac_d]),paG:(r[ac_pa]||'').trim(),acr:intn(r[ac_v])})).filter(r=>r.date),
+  const acRawKeys=new Set();
+  const acGroup=groupBy(raw.acr.map(r=>{
+      const rawKey=(r[ac_pa]||'').trim();
+      const paG=resolvePA(rawKey);
+      if(rawKey&&!isResolved(paG))acRawKeys.add(rawKey);
+      return {date:pdate(r[ac_d]),paG,acr:intn(r[ac_v])};
+    }).filter(r=>r.date),
     r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,acr:sum(rs,'acr')}));
   /* Диагностика: сколько строк акруалса дошло и на какую сумму — ловит обрезку CSV */
   const acRaw=raw.acr.length;
@@ -132,6 +178,11 @@ async function buildModel(textsOverride){
       +` · колонка даты: ${JSON.stringify(ac_d)} · образец: [${acSample}]`
       +(acDated<acRaw?` · ⚠ ${acRaw-acDated} без даты`:'')
       +(acMonths?` · по месяцам: ${acMonths}`:'')});
+  /* Диагностика сцепки: какие ключи акруалса не легли на справочник */
+  const acBadSum=acGroup.filter(r=>!isResolved(r.paG)).reduce((s,r)=>s+r.acr,0);
+  diag.push({name:'Сцепка акруалса',status:acRawKeys.size?'warn':'ok',rows:acGroup.length,
+    msg:`не срезолвилось ключей: ${acRawKeys.size} на ${Math.round(acBadSum).toLocaleString('ru-RU')} ₽`
+      +(acRawKeys.size?` · примеры: ${[...acRawKeys].slice(0,5).map(k=>'«'+k+'»').join(', ')}`:' · все ключи легли на справочник')});
 
   function parseSales(rr,taxFlat){
     if(!rr||!rr.length)return[]; const H=rr._headers;
@@ -157,7 +208,7 @@ async function buildModel(textsOverride){
     const s_pa2=col(sH2,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул продавца','Предмет;Артикул'),s_qty2=col(sH2,'ШТ поставлено','ШТ');
     const per={},sht={};
     groupBy(xr,r=>keyFn(r.pa),rs=>({k:keyFn(rs[0].pa),per:sum(rs,'per')})).forEach(g=>{if(g.k)per[g.k]=g.per;});
-    (shtRaw||[]).forEach(r=>{ const k=keyFn(r[s_pa2]); if(k)sht[k]=(sht[k]||0)+intn(r[s_qty2]); });
+    (shtRaw||[]).forEach(r=>{ const k=keyFn(resolvePA(r[s_pa2])); if(k)sht[k]=(sht[k]||0)+intn(r[s_qty2]); });
     const pu={}; Object.keys(per).forEach(k=>{ if(sht[k])pu[k]=Math.round(per[k]/sht[k]); });
     (dim||artDim).forEach(a=>{ const kP=keyFn(a.paP),kG=keyFn(a.paG); const v=(pu[kP]!==undefined)?pu[kP]:(pu[kG]!==undefined?pu[kG]:undefined); if(v!==undefined){pu[kP]=v;pu[kG]=v;} });
     return pu;
@@ -238,7 +289,9 @@ async function buildModel(textsOverride){
         +` · Пост.Р: ${Math.round(postBuh).toLocaleString('ru-RU')} ₽`
         +(noPU?` · без себестоимости: ${noPU} строк`:'')});
   }
-  acGroup.forEach(r=>obEF.push({paG:r.paG,y:r.date.getFullYear(),m:r.date.getMonth()+1,zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}));
+  /* Акруалс в ob: paG теперь канонический, поэтому строка ложится на предмет.
+     Поле acr несём с собой — чтобы разрез по предметам мог его показать. */
+  acGroup.forEach(r=>obEF.push({paG:r.paG,y:r.date.getFullYear(),m:r.date.getMonth()+1,acr:r.acr,zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}));
 
   const ezFin=!!(raw.wbfin_ezfr&&raw.wbfin_ezfr.length);
   const obEZ=ezFin?parseWBFin(raw.wbfin_ezfr,TAX_EZ):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2,artDim2.length?artDim2:artDim);
@@ -284,38 +337,43 @@ async function buildModel(textsOverride){
   }
 
   /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
-  /* Логистика WB = Доставка[37] + ПВЗ[28] + Возмещение издержек[58] + Приёмка[62]  */
-  /* Хранение отдельно = [60]                                                        */
-  /* taxFn(y,m) → ставка налога. EZFR: всегда 7%. EF: 7% до 01.02.2026, далее 12%. */
+  /* Логистика WB = Доставка + ПВЗ + Возмещение издержек + Приёмка                   */
+  /* Хранение отдельно                                                               */
+  /* taxFn(y,m) → ставка налога. EZFR: всегда 7%. EF: 7% до 01.02.2026, далее 12%.   */
+  /* ДВА ФОРМАТА: новый (русские заголовки) и старый бэкап 2021-2024 (английские).
+     Значения полей в обоих форматах русские (Продажа/Возврат/Логистика),
+     поэтому достаточно алиасов заголовков. Чего в старом формате НЕТ вовсе:
+     Хранение, Удержания, Операции на приемке, Виды логистики. */
   function parseWBFin(rr,taxFn){
     if(!rr||!rr.length)return[];
     const H=rr._headers;
-    const c_art=col(H,'Артикул поставщика');
-    const c_pred=col(H,'Предмет');
-    const c_reason=col(H,'Обоснование для оплаты');
-    const c_doctype=col(H,'Тип документа');
-    const c_date=col(H,'Дата продажи');
-    const c_qty=col(H,'Кол-во');
-    const c_retail=col(H,'Вайлдберриз реализовал Товар (Пр)','Вайлдберриз реализовал Товар','Вайлдберриз реализовал товар (Пр)');
-    const c_pay=col(H,'К перечислению Продавцу за реализованный Товар','К перечислению Продавцу');
-    const c_dost=col(H,'Услуги по доставке товара покупателю');
+    const c_art=col(H,'Артикул поставщика',"Supplier's Article");
+    const c_pred=col(H,'Предмет','Subject');
+    const c_reason=col(H,'Обоснование для оплаты','Reason for Payment');
+    const c_doctype=col(H,'Тип документа','Document Type');
+    const c_date=col(H,'Дата продажи','Sale Date');
+    const c_qty=col(H,'Кол-во','Quantity');
+    const c_retail=col(H,'Вайлдберриз реализовал Товар (Пр)','Вайлдберриз реализовал Товар','Вайлдберриз реализовал товар (Пр)','Wildberries Realized Goods (Pr)');
+    const c_pay=col(H,'К перечислению Продавцу за реализованный Товар','К перечислению Продавцу','Amount to Transfer to the Seller for the Realized Goods');
+    const c_dost=col(H,'Услуги по доставке товара покупателю','Services for delivering goods to the buyer');
     /* ЗАКАЗЫ из финотчёта: на строках «Логистика» с видом «К клиенту при продаже/отмене».
-       Привязка к месяцу по «Дате продажи» (как выкупы), чтобы месяцы сходились. */
-    const c_dostQty=col(H,'Количество доставок');
-    const c_logType=col(H,'Виды логистики, штрафов и корректировок ВВ','Виды логистики');
-    const c_pvz=col(H,'Возмещение за выдачу и возврат товаров на ПВЗ');
-    const c_vozmesh=col(H,'Возмещение издержек по перевозке/по складским операциям с товаром');
-    const c_priemka=col(H,'Операции на приемке','Операции на приёмке');
-    const c_hran=col(H,'Хранение');
-    const c_uderz=col(H,'Удержания');
-    const c_shtraf=col(H,'Общая сумма штрафов');
+       Привязка к месяцу по «Дате продажи» (как выкупы), чтобы месяцы сходились.
+       В СТАРОМ формате колонка «Виды логистики» пустая на всех строках → фолбэк ниже. */
+    const c_dostQty=col(H,'Количество доставок','Number of Deliveries');
+    const c_logType=col(H,'Виды логистики, штрафов и корректировок ВВ','Виды логистики','Types of Logistics, Fines, and Additional Payments');
+    const c_pvz=col(H,'Возмещение за выдачу и возврат товаров на ПВЗ','Compensation for the issuance and return of goods at PVZ');
+    const c_vozmesh=col(H,'Возмещение издержек по перевозке/по складским операциям с товаром','Compensation for Transportation Costs');
+    const c_priemka=col(H,'Операции на приемке','Операции на приёмке');   /* нет в старом формате */
+    const c_hran=col(H,'Хранение');                                       /* нет в старом формате */
+    const c_uderz=col(H,'Удержания');                                     /* нет в старом формате */
+    const c_shtraf=col(H,'Общая сумма штрафов','Total Penalty Amount');
     /* ── детализация комиссии (для вкладок «Разбор» и «Комиссия ВБ») ── */
-    const c_rozn=col(H,'Цена розничная');                                    /* [15] за ЕДИНИЦУ → умножаем на Кол-во */
-    const c_vv=col(H,'Вознаграждение Вайлдберриз (ВВ), без НДС');            /* [32] */
-    const c_vvnds=col(H,'НДС с Вознаграждения Вайлдберриз');                 /* [33] */
+    const c_rozn=col(H,'Цена розничная','Retail Price');                     /* за ЕДИНИЦУ → умножаем на Кол-во */
+    const c_vv=col(H,'Вознаграждение Вайлдберриз (ВВ), без НДС','Wildberries Reward (VV), excluding VAT');
+    const c_vvnds=col(H,'НДС с Вознаграждения Вайлдберриз','VAT from Wildberries Reward');
     const c_ekv=col(H,'Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
                      'Компенсация платежных услуг/Комиссия за интеграцию платежных сервисов',
-                     'Компенсация платёжных услуг');                          /* [29] эквайринг */
+                     'Компенсация платёжных услуг','Compensation for Acquiring Expenses');
     const c_ekvtype=col(H,'Тип платежа: компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
                           'Тип платежа: компенсация платежных услуг/Комиссия за интеграцию платежных сервисов',
                           'Тип платежа за Эквайринг/Комиссии за организацию платежей');
@@ -324,9 +382,13 @@ async function buildModel(textsOverride){
          «Комиссия за организацию платежа с НДС»                     → НЕ удержан, WB выставляет счёт
        Если считать его в kom всегда — тождество kom == ВВ+НДС+эквайринг+ПВЗ рвётся. */
     const EKV_BILLED=/комисси\S* за организацию платеж/i;
-    /* ВАЖНО: ПВЗ [28] на строках Продажа/Возврат уже входит в (vykr − К перечислению),
+    /* ВАЖНО: ПВЗ на строках Продажа/Возврат уже входит в (vykr − К перечислению),
        поэтому здесь он идёт ТОЛЬКО как компонент комиссии. Отдельные строки
        «Возмещение за выдачу…» — другие строки, они идут в dost (логистику). */
+
+    /* Признак старого формата — по отсутствию колонки видов логистики */
+    const oldFmt=!c_logType;
+    let zaksFallback=0;
 
     const map={};
     const totals={}; /* хранение и удержания без артикула — по месяцам */
@@ -336,15 +398,19 @@ async function buildModel(textsOverride){
       vyks:0,vykrGross:0,kPerech:0,dost:0,komp:0,zaks:0,
       rozn:0,vv:0,vvNds:0,ekvair:0,ekvBill:0,pvz:0});
     const getTotals=k=>totals[k]||(totals[k]={y:0,m:0,hran:0,rek:0,shtraf:0,priemka:0});
-    const resolveArt=art=>{
+    /* Умная сцепка и здесь: если артикул сам по себе не узнан — пробуем «Предмет+Артикул» */
+    const resolveArt=(art,pred)=>{
       const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
-      return rec?rec.paG:('#'+art);
+      if(rec)return rec.paG;
+      if(pred){ const p=resolvePA(String(pred).trim()+String(art).trim(),''); if(p)return p; }
+      return '#'+art;
     };
 
     rr.forEach(r=>{
       const d=pdate(r[c_date]); if(!d)return;
       const reason=(r[c_reason]||'').trim();
       const art=(r[c_art]||'').trim();
+      const pred=c_pred?(r[c_pred]||'').trim():'';
       const k_ym=ym(d);
 
       /* ── Продажи / Возвраты / Компенсации ── */
@@ -354,13 +420,13 @@ async function buildModel(textsOverride){
          kom == ВВ+НДС+эквайринг+ПВЗ (kom уходил в минус без компонент). */
       if(reason==='Добровольная компенсация при возврате'||reason==='Компенсация ущерба'){
         const sg=(r[c_doctype]||'').trim()==='Продажа'?1:-1;
-        const paG=art?resolveArt(art):'(Компенсации WB)';
+        const paG=art?resolveArt(art,pred):'(Компенсации WB)';
         const o=getOrCreate(k_ym+'|'+paG,paG,d);
         o.komp+=sg*num(r[c_pay]);
       }
       else if(reason==='Продажа'||reason==='Возврат'){
         if(!art)return;
-        const paG=resolveArt(art);
+        const paG=resolveArt(art,pred);
         const o=getOrCreate(k_ym+'|'+paG,paG,d);
         const qty=intn(r[c_qty]);
         const retail=num(r[c_retail]);
@@ -382,29 +448,35 @@ async function buildModel(textsOverride){
       /* ── Логистика (доставка по артикулам) ── */
       else if(reason==='Логистика'){
         if(!art)return;
-        const paG=resolveArt(art);
+        const paG=resolveArt(art,pred);
         const o=getOrCreate(k_ym+'|'+paG,paG,d);
         o.dost+=num(r[c_dost]);
         /* заказы = доставки «К клиенту при продаже» + «К клиенту при отмене» (по дате продажи) */
         const lt=String(c_logType?(r[c_logType]||''):'');
-        if(/К клиенту при (продаже|отмене)/i.test(lt)) o.zaks+=intn(r[c_dostQty]);
+        if(lt){
+          if(/К клиенту при (продаже|отмене)/i.test(lt)) o.zaks+=intn(r[c_dostQty]);
+        } else {
+          /* СТАРЫЙ ФОРМАТ (или пустая колонка): вида логистики нет — различить
+             «к клиенту» и «от клиента» нечем, берём все доставки строки. */
+          const q=intn(r[c_dostQty]); o.zaks+=q; zaksFallback+=q;
+        }
       }
       /* ── Возмещение за выдачу на ПВЗ (по артикулам если есть) ── */
       else if(reason==='Возмещение за выдачу и возврат товаров на ПВЗ'){
         const v=num(r[c_pvz]);
-        if(art){const paG=resolveArt(art);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
+        if(art){const paG=resolveArt(art,pred);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
         else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
       }
       /* ── Возмещение издержек по перевозке (по артикулам если есть) ── */
       else if(reason==='Возмещение издержек по перевозке/по складским операциям с товаром'){
         const v=num(r[c_vozmesh]);
-        if(art){const paG=resolveArt(art);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
+        if(art){const paG=resolveArt(art,pred);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
         else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
       }
       /* ── Обработка товара / приёмка ── */
       else if(reason==='Обработка товара'){
         const v=num(r[c_priemka]);
-        if(art){const paG=resolveArt(art);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
+        if(art){const paG=resolveArt(art,pred);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
         else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
       }
       /* ── Хранение (без артикула) ── */
@@ -423,6 +495,14 @@ async function buildModel(textsOverride){
         t.shtraf+=num(r[c_shtraf]);
       }
     });
+
+    /* Диагностика формата: видно, старый бэкап приехал или новый */
+    diag.push({name:'Финотчёт: формат',status:oldFmt?'warn':'ok',rows:rr.length,
+      msg:(oldFmt?'СТАРЫЙ формат (англ. заголовки)':'новый формат')
+        +` · заголовок «Виды логистики»: ${c_logType?'есть':'НЕТ'}`
+        +` · Хранение: ${c_hran?'есть':'НЕТ'} · Удержания: ${c_uderz?'есть':'НЕТ'} · Приёмка: ${c_priemka?'есть':'НЕТ'}`
+        +(zaksFallback?` · заказы по фолбэку (все доставки): ${zaksFallback.toLocaleString('ru-RU')} шт`:'')
+        +(oldFmt?' · ⚠ хранение/удержания/приёмка в старом формате отсутствуют → расходы занижены':'')});
 
     /* Собираем финальные строки */
     const out=[];
@@ -584,8 +664,10 @@ async function buildModel(textsOverride){
   const obOZ=parseOzon(raw.ozon);
 
   const acForCo=ac=>ac.map(r=>({y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,acr:r.acr}));
-  const postEF=(raw.post&&raw.post.length)?(function(){const pH=raw.post._headers;const p_s=col(pH,'Сумма'),p_d=col(pH,'Дата');
-    return raw.post.map(r=>{const d=pdate(r[p_d]);return d?{y:d.getFullYear(),m:d.getMonth()+1,summa:intn(r[p_s])}:null;}).filter(Boolean);})():[];
+  /* Постоянные расходы больше НЕ берём с отдельного листа «Пост»:
+     они уже есть в Расход/Расход2 построчно («Что» = «Пост расходы») и там
+     привязаны к артикулу. Лист «Пост» давал строки без предмета и задваивал суммы. */
+  const postEF=[];
   M.co={
     EF:  {ob:obEF, acr:acForCo(acGroup), postR:postEF},
     EZFR:{ob:obEZ, acr:[],               postR:[]},
