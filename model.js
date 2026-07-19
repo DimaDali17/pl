@@ -694,6 +694,13 @@ async function buildModel(textsOverride){
       "Утилизация товара: Вы не забрали в срок","Утилизация товара: Повреждённые из-за упаковки",
       "Кросс-докинг","Выдача товара","Доставка до места выдачи"]);
     const OZ_REK_TYPES=new Set(["Вывод в топ","Трафареты","Оплата за клик","Продвижение с оплатой за заказ"]);
+    /* Фолбэк по ГРУППЕ услуг: список типов у Ozon растёт, и раньше всё, чего в нём
+       не было, молча исчезало из P&L («Звёздные товары», «Обработка в грузоместе»,
+       «Доставка до места выдачи силами Ozon» и пр.). Теперь ничего не теряется. */
+    const OZ_GRP_LOG=new Set(['Услуги доставки','Услуги партнёров','Услуги FBO','Другие услуги и штрафы']);
+    const OZ_GRP_REK=new Set(['Продвижение и реклама']);
+    const OZ_GRP_KOMP=new Set(['Компенсации и декомпенсации']);
+    const ozUnk={};   /* тип → сумма, попавшая по фолбэку (для диагностики) */
 
     const map={};
 
@@ -715,7 +722,7 @@ async function buildModel(textsOverride){
             paG,paP,base,code:cleanCode(art),
             orderQty:0,salesQty:0,
             salesRub:0,bonusRub:0,returnRub:0,partnerRub:0,
-            kom:0,log:0,rek:0
+            kom:0,log:0,rek:0,komp:0
         });
 
         /* Штуки */
@@ -730,6 +737,13 @@ async function buildModel(textsOverride){
         else if(typ==='Вознаграждение за продажу'||typ==='Возврат вознаграждения') o.kom+=s;
         else if(OZ_LOG_TYPES.has(typ)) o.log+=s;
         else if(OZ_REK_TYPES.has(typ)) o.rek+=s;
+        else {
+            const g=String(r[c_grp]||'').trim();
+            if(OZ_GRP_REK.has(g)) o.rek+=s;
+            else if(OZ_GRP_KOMP.has(g)) o.komp+=s;
+            else o.log+=s;                       /* доставка/партнёры/FBO/штрафы */
+            ozUnk[typ]=(ozUnk[typ]||0)+s;
+        }
     });
 
     const rsFor=o=>{
@@ -763,6 +777,7 @@ async function buildModel(textsOverride){
     const T={sales:0,bonus:0,ret:0,partner:0,kom:0,komReal:0,vykr:0,tax:0};
     const out=vals.map(o=>{
         const vykr=Math.round(o.salesRub+o.returnRub);          /* деньги клиента */
+        const rozn=Math.round(o.salesRub+o.bonusRub+o.returnRub+o.partnerRub); /* цена продавца */
         const comp=Math.round(o.bonusRub+o.partnerRub);         /* компенсации площадки */
         const komNom=Math.round(-o.kom);                        /* вознаграждение Ozon */
         const kom=komNom-comp;                                  /* реальная комиссия */
@@ -778,6 +793,8 @@ async function buildModel(textsOverride){
             vykr,
             kom,
             komNom,                    /* номинальное вознаграждение Ozon (для «Разбор») */
+            rozn,                      /* полная цена продавца = выручка + баллы (аналог «Цена розничная») */
+            komp:Math.round(o.komp),   /* компенсации/декомпенсации Ozon */
             bonus:Math.round(o.bonusRub),
             partner:Math.round(o.partnerRub),
             taxBase,
@@ -796,7 +813,13 @@ async function buildModel(textsOverride){
         +` · Ком.МП номинальная ${r0(T.kom)} (${T.tax?(T.kom/T.tax*100).toFixed(1):'—'}% от базы «выручка+баллы»)`
         +` · РЕАЛЬНАЯ ${r0(T.komReal)} (${T.vykr?(T.komReal/T.vykr*100).toFixed(1):'—'}% от денег клиента)`
         +` · база налога ${r0(T.tax)}`
-        +` · ⚠ проверь знаки: Баллы должны быть ПЛЮС (доплата площадки), Возврат — МИНУС`});
+        });
+    const unkKeys=Object.keys(ozUnk).sort((a,b)=>Math.abs(ozUnk[b])-Math.abs(ozUnk[a]));
+    diag.push({name:'Ozon: типы по фолбэку',status:unkKeys.length?'warn':'ok',rows:unkKeys.length,
+      msg:unkKeys.length?`разнесены по ГРУППЕ услуг (раньше терялись): `
+            +unkKeys.slice(0,10).map(k=>`${k} ${r0(ozUnk[k])}`).join(' · ')
+            +` · Σ ${r0(unkKeys.reduce((a,k)=>a+ozUnk[k],0))}`
+          :'все типы опознаны явно'});
     return out;
   }
   const obOZ=parseOzon(raw.ozon);
