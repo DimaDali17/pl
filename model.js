@@ -372,13 +372,26 @@ async function buildModel(textsOverride){
       const k=r.date.getFullYear()+'|'+(r.date.getMonth()+1)+'|'+r.paG;
       const o=repYM[k]||(repYM[k]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zaksRep:0,zakrRep:0});
       o.zaksRep+=r.zaks; o.zakrRep+=r.zakr; });
-    const repHas={}; Object.values(repYM).forEach(o=>{ if(o.zaksRep)repHas[o.y+'|'+o.m]=1; });
+    const repHas={},repYMsum={};
+    Object.values(repYM).forEach(o=>{ const k=o.y+'|'+o.m;
+      if(o.zaksRep){repHas[k]=1; repYMsum[k]=(repYMsum[k]||0)+o.zaksRep;} });
+    /* ВАЖНО: наличие в финотчёте одной случайной строки «К клиенту» не значит,
+       что месяц закрыт. В окт-2022 таких строк было 1, в дек-2023 — 2, и они
+       блокировали фолбэк на report, обнуляя весь месяц. Поэтому сравниваем масштаб:
+       если финотчёт дал меньше половины от report — доверяем report. */
+    const MIN_SHARE=0.5;
     const src={};   /* месяц → откуда взяли заказы */
     Object.keys(finYM).forEach(k=>{src[k]='фин';});
+    const useRepYM={};
+    Object.keys(repYMsum).forEach(k=>{
+      if(!finYM[k]||finYM[k]<repYMsum[k]*MIN_SHARE){ useRepYM[k]=1; src[k]='report'; }
+    });
+    /* если месяц отдан report — гасим крохи, пришедшие из финотчёта, чтобы не смешивать */
+    let wiped=0;
+    ob.forEach(r=>{ const k=r.y+'|'+r.m;
+      if(useRepYM[k]&&r.zaks){ wiped+=r.zaks; r.zaks=0; r.zakr=0; } });
     for(const o of Object.values(repYM)){
-      const k=o.y+'|'+o.m;
-      const useRep=!finYM[k];
-      src[k]=finYM[k]?'фин':'report';
+      const k=o.y+'|'+o.m, useRep=!!useRepYM[k];
       ob.push({paG:o.paG,y:o.y,m:o.m,
         zaks:useRep?o.zaksRep:0,
         zakr:useRep?Math.round(o.zaksRep*(chek[k+'|'+o.paG]||0)):0,
@@ -397,7 +410,8 @@ async function buildModel(textsOverride){
     diag.push({name:tag+': источник заказов',status:'ok',rows:0,
       msg:`месяцев из финотчёта: ${cnt['фин']||0} · из report: ${cnt['report']||0}`
         +` · по доставкам: ${cnt['доставки']||0}`
-        +(promoted?` (${promoted.toLocaleString('ru-RU')} шт)`:'')});
+        +(promoted?` (${promoted.toLocaleString('ru-RU')} шт)`:'')
+        +(wiped?` · погашено крох из финотчёта: ${wiped.toLocaleString('ru-RU')} шт`:'')});
   }
 
   /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
@@ -731,25 +745,58 @@ async function buildModel(textsOverride){
         return v||0;
     };
 
+    /* ══ Ozon: сопоставимость с WB (вариант Б: gross + реальная комиссия) ══
+       «Баллы за скидки» — это компенсация Ozon за скидку, которую он профинансировал.
+       Полный аналог СПП у WB: клиент заплатил меньше, площадка доплатила продавцу.
+
+       ВЫКУП,РУБ  = деньги клиента = Выручка + Возврат выручки.
+                    Аналог «ВБ реализовал Товар (Пр)». Баллы сюда НЕ входят —
+                    их платит площадка, а не покупатель.
+       КОМ.МП     = РЕАЛЬНАЯ комиссия = Вознаграждение − Баллы − Программы партнёров.
+                    Номинальные 43% берутся с базы «Выручка + Баллы» и неинформативны;
+                    важно, сколько перечислено против того, что заплатил клиент.
+                    Тождество: Выкуп,руб − Ком.МП = перечислено (до логистики и рекламы).
+                    Как и у WB в 2022–2023, комиссия может уйти в минус — это норма.
+       НАЛОГ      = с базы «Выручка + Баллы + Партнёры» (баллы — доход продавца),
+                    а НЕ с Выкуп,руб. В этом отличие Ozon от WB. */
     const vals=Object.values(map);
+    const T={sales:0,bonus:0,ret:0,partner:0,kom:0,komReal:0,vykr:0,tax:0};
     const out=vals.map(o=>{
-        const vykr=Math.round(o.salesRub+o.bonusRub+o.returnRub+o.partnerRub);
+        const vykr=Math.round(o.salesRub+o.returnRub);          /* деньги клиента */
+        const comp=Math.round(o.bonusRub+o.partnerRub);         /* компенсации площадки */
+        const komNom=Math.round(-o.kom);                        /* вознаграждение Ozon */
+        const kom=komNom-comp;                                  /* реальная комиссия */
+        const taxBase=Math.round(o.salesRub+o.bonusRub+o.returnRub+o.partnerRub);
         const price=o.salesQty?vykr/o.salesQty:0;
+        T.sales+=o.salesRub; T.bonus+=o.bonusRub; T.ret+=o.returnRub; T.partner+=o.partnerRub;
+        T.kom+=komNom; T.komReal+=kom; T.vykr+=vykr; T.tax+=taxBase;
         return{
             paG:o.paG,y:o.y,m:o.m,
             zaks:o.orderQty,
             vyks:o.salesQty,
             zakr:Math.round(price*o.orderQty),
             vykr,
-            kom:Math.round(-o.kom),
+            kom,
+            komNom,                    /* номинальное вознаграждение Ozon (для «Разбор») */
+            bonus:Math.round(o.bonusRub),
+            partner:Math.round(o.partnerRub),
+            taxBase,
             rek:Math.round(-o.rek),
             post:0,
-            nalog:Math.round(vykr*((o.y>2026||(o.y===2026&&o.m>=2))?0.12:0.07)),
+            nalog:Math.round(taxBase*((o.y>2026||(o.y===2026&&o.m>=2))?0.12:0.07)),
             hran:0,
             dost:Math.round(-o.log),
             perem:Math.round(rsFor(o)*o.salesQty)
         };
     });
+    const r0=n=>Math.round(n).toLocaleString('ru-RU');
+    diag.push({name:'Ozon: разбор выручки',status:'ok',rows:out.length,
+      msg:`Выручка ${r0(T.sales)} · Баллы ${r0(T.bonus)} · Возврат ${r0(T.ret)} · Партнёры ${r0(T.partner)}`
+        +` → Выкуп,руб (деньги клиента) ${r0(T.vykr)}`
+        +` · Ком.МП номинальная ${r0(T.kom)} (${T.tax?(T.kom/T.tax*100).toFixed(1):'—'}% от базы «выручка+баллы»)`
+        +` · РЕАЛЬНАЯ ${r0(T.komReal)} (${T.vykr?(T.komReal/T.vykr*100).toFixed(1):'—'}% от денег клиента)`
+        +` · база налога ${r0(T.tax)}`
+        +` · ⚠ проверь знаки: Баллы должны быть ПЛЮС (доплата площадки), Возврат — МИНУС`});
     return out;
   }
   const obOZ=parseOzon(raw.ozon);
