@@ -234,6 +234,10 @@ async function buildModel(textsOverride){
   const TAX_EZ=()=>0.07;
 
   const salesEF=parseSales(raw.report,null);
+  {const ry=[...new Set(salesEF.map(r=>r.date.getFullYear()))].sort();
+   const rz=salesEF.reduce((s,r)=>s+r.zaks,0);
+   diag.push({name:'report: охват',status:ry.length?'ok':'warn',rows:salesEF.length,
+     msg:`годы: ${ry.join(', ')||'—'} · заказов всего: ${rz.toLocaleString('ru-RU')} шт`});}
   /* EZFR: если есть еженедельный финотчёт — берём оттуда, иначе старый report2 */
   const salesEZ=parseSales(raw.report2,0.07);
   const ezOwn=xRows2.length>0;   /* у EZFR своя бухгалтерия (лист Расход EZFR) */
@@ -270,16 +274,8 @@ async function buildModel(textsOverride){
       .forEach(g=>{ rekMP+=g.rekMP; rekBlog+=g.rekBlog; postBuh+=g.post;
         obEF.push({paG:g.paG,y:g.y,m:g.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,
           rek:g.rek,rekMP:g.rekMP,rekBlog:g.rekBlog,rekWB:0,post:g.post,nalog:0,hran:0,dost:0,perem:0}); });
-    /* zaks и zakr теперь из финотчёта (доставки «К клиенту» × средний чек).
-       report только для сверки: zaksRep — заказы report, показываем в диагностике. */
-    const omEF={};
-    for(const r of salesEF){ if(!r.date)continue;
-      const k=r.date.getFullYear()+'|'+(r.date.getMonth()+1)+'|'+r.paG;
-      const o=omEF[k]||(omEF[k]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zaksRep:0,zakrRep:0});
-      o.zaksRep+=r.zaks; o.zakrRep+=r.zakr; }
-    for(const o of Object.values(omEF)){
-      obEF.push({paG:o.paG,y:o.y,m:o.m,zaks:0,zaksRep:o.zaksRep,zakrRep:o.zakrRep,zakr:0,
-        vyks:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}); }
+    /* Заказы: финотчёт → report → доставки (см. fixOrders) */
+    fixOrders(obEF,salesEF,'EF');
     const zaksFin=obEF.reduce((s,r)=>s+(r.zaks||0),0);
     const zaksRep=obEF.reduce((s,r)=>s+(r.zaksRep||0),0);
     const rekWBef=obEF.reduce((s,r)=>s+(r.rekWB||0),0);
@@ -324,16 +320,54 @@ async function buildModel(textsOverride){
         +(noPU?` · без себестоимости: ${noPU} строк с выкупами — нет пары в Расход/ШТУК EZFR`:'')});
   }
 
-  /* Заказы EZFR (штуки и рубли) — из финотчёта. report2 только для сверки. */
-  if(raw.wbfin_ezfr&&raw.wbfin_ezfr.length&&salesEZ.length){
-    const orderMap={};
-    for(const r of salesEZ){if(!r.date)continue;
-      const key=r.date.getFullYear()+'|'+(r.date.getMonth()+1)+'|'+r.paG;
-      const o=orderMap[key]||(orderMap[key]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zaksRep:0,zakrRep:0});
-      o.zaksRep+=r.zaks; o.zakrRep+=r.zakr;}
-    for(const o of Object.values(orderMap)){
-      obEZ.push({paG:o.paG,y:o.y,m:o.m,zaks:0,zaksRep:o.zaksRep,zakrRep:o.zakrRep,zakr:0,
-        vyks:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0});}
+  /* Заказы EZFR — тот же приоритет: финотчёт → report2 → доставки */
+  if(ezFin&&salesEZ.length) fixOrders(obEZ,salesEZ,'EZFR');
+
+  /* ── Заказы: три источника по приоритету ──
+     1) финотчёт, строки логистики «К клиенту при продаже/отмене» (2025+)
+     2) report / report2 — за месяцы, где ВБ не детализировал прямую логистику
+        (2021–2024: в финотчёте только обратная логистика «Возврат (К продавцу)»)
+     3) zaksAlt — все доставки строки, если колонки видов логистики нет вовсе
+     Заказ,руб считаем через средний чек по gross того же артикул-месяца,
+     а НЕ через «Сумма заказов минус комиссия» из report: та величина нетто
+     и, подмешанная к gross-выручке, ломает ДРР%. */
+  function fixOrders(ob,salesRep,tag){
+    const chek={},finYM={},altYM={};
+    ob.forEach(r=>{ const k=r.y+'|'+r.m;
+      if(r.vyks>0&&r.vykr) chek[k+'|'+r.paG]=r.vykr/r.vyks;
+      if(r.zaks) finYM[k]=(finYM[k]||0)+r.zaks;
+      if(r.zaksAlt) altYM[k]=(altYM[k]||0)+r.zaksAlt; });
+    const repYM={};
+    (salesRep||[]).forEach(r=>{ if(!r.date)return;
+      const k=r.date.getFullYear()+'|'+(r.date.getMonth()+1)+'|'+r.paG;
+      const o=repYM[k]||(repYM[k]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,zaksRep:0,zakrRep:0});
+      o.zaksRep+=r.zaks; o.zakrRep+=r.zakr; });
+    const repHas={}; Object.values(repYM).forEach(o=>{ if(o.zaksRep)repHas[o.y+'|'+o.m]=1; });
+    const src={};   /* месяц → откуда взяли заказы */
+    Object.keys(finYM).forEach(k=>{src[k]='фин';});
+    for(const o of Object.values(repYM)){
+      const k=o.y+'|'+o.m;
+      const useRep=!finYM[k];
+      src[k]=finYM[k]?'фин':'report';
+      ob.push({paG:o.paG,y:o.y,m:o.m,
+        zaks:useRep?o.zaksRep:0,
+        zakr:useRep?Math.round(o.zaksRep*(chek[k+'|'+o.paG]||0)):0,
+        zaksRep:o.zaksRep,zakrRep:o.zakrRep,
+        vyks:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0});
+    }
+    /* 3) там, где нет ни финотчёта, ни report — поднимаем zaksAlt */
+    let promoted=0;
+    ob.forEach(r=>{ const k=r.y+'|'+r.m;
+      if(r.zaksAlt&&!finYM[k]&&!repHas[k]){
+        r.zaks=r.zaksAlt; r.zakr=Math.round(r.zaksAlt*(chek[k+'|'+r.paG]||0));
+        promoted+=r.zaksAlt; src[k]='доставки';
+      } });
+    const cnt={фин:0,report:0,доставки:0};
+    Object.values(src).forEach(v=>{cnt[v]=(cnt[v]||0)+1;});
+    diag.push({name:tag+': источник заказов',status:'ok',rows:0,
+      msg:`месяцев из финотчёта: ${cnt['фин']||0} · из report: ${cnt['report']||0}`
+        +` · по доставкам: ${cnt['доставки']||0}`
+        +(promoted?` (${promoted.toLocaleString('ru-RU')} шт)`:'')});
   }
 
   /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
@@ -395,7 +429,7 @@ async function buildModel(textsOverride){
     const ym=d=>d.getFullYear()+'-'+(d.getMonth()+1);
 
     const getOrCreate=(key,paG,d)=>map[key]||(map[key]={paG,y:d.getFullYear(),m:d.getMonth()+1,
-      vyks:0,vykrGross:0,kPerech:0,dost:0,komp:0,zaks:0,
+      vyks:0,vykrGross:0,kPerech:0,dost:0,komp:0,zaks:0,zaksAlt:0,
       rozn:0,vv:0,vvNds:0,ekvair:0,ekvBill:0,pvz:0});
     const getTotals=k=>totals[k]||(totals[k]={y:0,m:0,hran:0,rek:0,shtraf:0,priemka:0});
     /* Умная сцепка и здесь: если артикул сам по себе не узнан — пробуем «Предмет+Артикул» */
@@ -458,7 +492,7 @@ async function buildModel(textsOverride){
         } else {
           /* СТАРЫЙ ФОРМАТ (или пустая колонка): вида логистики нет — различить
              «к клиенту» и «от клиента» нечем, берём все доставки строки. */
-          const q=intn(r[c_dostQty]); o.zaks+=q; zaksFallback+=q;
+          const q=intn(r[c_dostQty]); o.zaksAlt+=q; zaksFallback+=q;
         }
       }
       /* ── Возмещение за выдачу на ПВЗ (по артикулам если есть) ── */
@@ -504,6 +538,33 @@ async function buildModel(textsOverride){
         +(zaksFallback?` · заказы по фолбэку (все доставки): ${zaksFallback.toLocaleString('ru-RU')} шт`:'')
         +(oldFmt?' · ⚠ хранение/удержания/приёмка в старом формате отсутствуют → расходы занижены':'')});
 
+    /* ── Диагностика по годам: где именно рвётся комиссия ──
+       ком% — (gross−net)/gross · «gross без net» — строки с выручкой, но без
+       «К перечислению» (признак несостыковки колонок) · «net>gross» — невозможная
+       ситуация при корректном чтении. */
+    const byY={};
+    rr.forEach(r=>{ const d=pdate(r[c_date]); if(!d)return;
+      const rs=(r[c_reason]||'').trim();
+      if(rs!=='Продажа'&&rs!=='Возврат')return;
+      const y=d.getFullYear(); const b=byY[y]||(byY[y]={n:0,g:0,p:0,z:0,neg:0});
+      const g=num(r[c_retail]), p=num(r[c_pay]);
+      b.n++; b.g+=g; b.p+=p; if(g&&!p)b.z++; if(p>g)b.neg++;
+      byY[y]=b; });
+    diag.push({name:'Финотчёт: комиссия по годам',status:'ok',rows:0,
+      msg:Object.keys(byY).sort().map(y=>{const b=byY[y];
+        return `${y}: ком ${b.g?(((b.g-b.p)/b.g)*100).toFixed(1):'—'}% · строк ${b.n}`
+          +` · gross без net: ${b.z} · net>gross: ${b.neg}`;}).join(' │ ')});
+    /* Диагностика видов логистики: какие формулировки реально встречаются */
+    if(c_logType){
+      const lt={};
+      rr.forEach(r=>{ if((r[c_reason]||'').trim()!=='Логистика')return;
+        const d=pdate(r[c_date]); if(!d)return;
+        const k=d.getFullYear()+' '+(String(r[c_logType]||'').trim()||'(пусто)');
+        lt[k]=(lt[k]||0)+intn(r[c_dostQty]); });
+      diag.push({name:'Финотчёт: виды логистики',status:'ok',rows:0,
+        msg:Object.entries(lt).sort().map(([k,v])=>`${k}: ${v.toLocaleString('ru-RU')}`).join(' │ ')});
+    }
+
     /* Собираем финальные строки */
     const out=[];
     for(const o of Object.values(map)){
@@ -521,7 +582,7 @@ async function buildModel(textsOverride){
       const avgCena=o.vyks?o.vykrGross/o.vyks:0;
       const zakr=Math.round(o.zaks*avgCena);
       out.push({paG:o.paG,y:o.y,m:o.m,
-        zaks:o.zaks,vyks:o.vyks,zakr,vykr,
+        zaks:o.zaks,zaksAlt:o.zaksAlt,vyks:o.vyks,zakr,vykr,
         kom,komp,rek:0,post:0,
         /* налог с того, что реально пришло: К перечислению + компенсации */
         nalog:Math.round((net+komp)*(taxFn?taxFn(o.y,o.m):0.07)),
