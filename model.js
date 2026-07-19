@@ -72,6 +72,27 @@ async function buildModel(textsOverride){
   diag.push({name:'Артикул (справочник)',status:predEmpty>artDim.length*0.5?'err':'ok',rows:artDim.length,
     msg:`Предмет-колонка: ${c_pred||'—'} · пустых предметов: ${predEmpty} · пример: «${smp0.predmet||''}» + «${smp0.glub||''}» → ключ «${smp0.paG||''}»`});
 
+  /* Диагностика справочника: заголовки с индексами, дубли имён и «залипшие» значения
+     глубины. Если один и тот же артикул стоит глубиной у многих предметов — колонка
+     читается не та (лист с блоками рядом + схлопывание одинаковых заголовков). */
+  {const aH2=(raw.art._headers||[]).map(h=>String(h==null?'':h).trim());
+   const cnt={}; aH2.forEach(h=>{ if(h)cnt[h]=(cnt[h]||0)+1; });
+   const dup=Object.keys(cnt).filter(k=>cnt[k]>1);
+   const gc={},pc={};
+   artDim.forEach(a=>{ if(a.glub)gc[a.glub]=(gc[a.glub]||0)+1; if(a.post)pc[a.post]=(pc[a.post]||0)+1; });
+   const top=o=>Object.keys(o).sort((x,y)=>o[y]-o[x]).slice(0,4).map(k=>`«${k}»×${o[k]}`).join(' · ');
+   const gTop=Object.keys(gc).sort((x,y)=>gc[y]-gc[x])[0];
+   const bad=gTop&&gc[gTop]>3;
+   diag.push({name:'Справочник: колонки',status:(dup.length||bad)?'warn':'ok',rows:artDim.length,
+     msg:`заголовки: ${aH2.map((h,i)=>i+':'+(h||'—')).join(' | ')}`
+       +` ‖ выбрано: Предмет=${JSON.stringify(c_pred)} · Артикул поставщика=${JSON.stringify(c_post)}`
+       +` · Артикул.Глубина=${JSON.stringify(c_glub)} · Сцепка=${JSON.stringify(c_scep)}`
+       +(dup.length?` ‖ ⚠ ДУБЛИ ИМЁН: ${dup.join(', ')}`:'')
+       +` ‖ частые значения глубины: ${top(gc)||'—'}`
+       +` ‖ частые артикулы поставщика: ${top(pc)||'—'}`
+       +` ‖ первые строки: ${artDim.slice(0,4).map(a=>`[предмет «${a.predmet}» | арт «${a.post}» | глуб «${a.glub}»]`).join(' ')}`
+       +(bad?` ‖ ⚠ глубина «${gTop}» повторяется у ${gc[gTop]} предметов — похоже, колонка читается не та`:'')});}
+
   /* ── Справочник артикулов EZFR (своя бухгалтерия, лист art2) ──
      Ключи EF и EZFR не перетираем: при совпадении paG приоритет у EF. */
   const artDim2=[];
@@ -107,14 +128,45 @@ async function buildModel(textsOverride){
     if(!rawS) return fallback===undefined?'':fallback;
     const n=nk(rawS);
     const rec=artKeyIndex.get(n);
-    if(rec) return rec.paG;
+    if(rec) return canonOf(rec).paG;
     for(let i=0;i<artSuffix.length;i++){
       const art=artSuffix[i][0];
-      if(art.length>2&&n.endsWith(art)) return artSuffix[i][1].paG;
+      if(art.length>2&&n.endsWith(art)) return canonOf(artSuffix[i][1]).paG;
     }
     return fallback===undefined?rawS:fallback;
   }
   const isResolved=p=>artKeyIndex.has(nk(p));
+  /* ── Ключ себестоимости: ТОЛЬКО Артикул.Глубина, без предмета ──
+     Предмет у одного артикула в разных листах отличается: в ШТУК «Бандалетки»,
+     в финотчёте/справочнике — «Бюстгальтеры», «Колготки», «Капоры». Глубина при
+     этом одна. Ключ «Предмет+Глубина» из-за этого рассыпался на 6 разных ключей,
+     и себестоимость не находилась ни по одному. */
+  function recOf(sv){
+    const raw=String(sv==null?'':sv).trim(); if(!raw)return null;
+    const n=nk(raw);
+    const r=artKeyIndex.get(n); if(r)return r;
+    for(let i=0;i<artSuffix.length;i++){ const a=artSuffix[i][0]; if(a.length>2&&n.endsWith(a))return artSuffix[i][1]; }
+    return null;
+  }
+  function glubKey(sv){ const r=recOf(sv); if(!r)return ''; return nk(r.glub||r.post||''); }
+  /* ── Канонический ключ строки P&L ──
+     Одна глубина = одна строка. TB21white и TB21black схлопываются в TB21black.
+     Предмет берём ПЕРВЫЙ по справочнику для этой глубины: у ВБ один и тот же
+     артикул приходит под разными предметами («Бюстгальтеры», «Колготки», «Капоры»
+     для essбандалеткибеж), и без канона строка рассыпалась на шесть. */
+  const glubCanon=new Map();
+  [].concat(artDim,artDim2).forEach(a=>{ const g=nk(a.glub||a.post||'');
+    if(g&&!glubCanon.has(g))glubCanon.set(g,a); });
+  const canonOf=rec=>{ if(!rec)return rec; const g=nk(rec.glub||rec.post||'');
+    return (g&&glubCanon.get(g))||rec; };
+  {const multi=new Map();
+   [].concat(artDim,artDim2).forEach(a=>{ const g=nk(a.glub||a.post||''); if(!g)return;
+     if(!multi.has(g))multi.set(g,new Set()); multi.get(g).add(a.predmet); });
+   const bad=[...multi.entries()].filter(([g,st])=>st.size>1);
+   diag.push({name:'Глубина: разные предметы',status:bad.length?'warn':'ok',rows:bad.length,
+     msg:bad.length?`глубин с несколькими предметами: ${bad.length} · схлопнуты в один ключ · `
+           +bad.slice(0,6).map(([g,st])=>`«${g}» → ${[...st].slice(0,4).join(' / ')}`).join(' · ')
+         :'у каждой глубины один предмет'});}
 
   /* ═══════ Мультикомпанийность: EF (report) · EZFR (report2) · OZON · Консолид ═══════ */
   /* Расход построчно. Пост.расходы и Реклама выделяются, остальное — переменные.
@@ -191,7 +243,7 @@ async function buildModel(textsOverride){
       c_vyks=col(H,'Выкупили, шт.','Выкупили шт'),c_den=col(H,'День','Дата');
     const TAX=new Date(2026,1,1); const out=[];
     rr.forEach(r=>{ const d=pdate(r[c_den]); if(!d)return; const post=(r[c_post]||'').trim();
-      const rec=artByPostL.get(lnk(post))||artByPostA.get(nk(post)); const paG=rec?rec.paG:('#'+post);
+      const rec=canonOf(artByPostL.get(lnk(post))||artByPostA.get(nk(post))); const paG=rec?rec.paG:('#'+post);
       const perech=num(r[c_per]); const nalog=taxFlat!=null?Math.round(perech*taxFlat):Math.round(perech*(d>=TAX?0.12:0.07));
       out.push({date:d,paG,zaks:intn(r[c_zaks]),vyks:intn(r[c_vyks]),zakr:num(r[c_zakr]),vykr:perech,kom:0,nalog}); });
     return out;
@@ -199,7 +251,7 @@ async function buildModel(textsOverride){
   function parseLog(rr){
     if(!rr||!rr.length)return[]; const H=rr._headers;
     const c_end=col(H,'Период конец'),c_art=col(H,'Артикул'),c_pr=col(H,'Предмет'),c_hr=col(H,'Хранение'),c_do=col(H,'Доставка');
-    const rows=rr.map(r=>{ const rec=artByPredArt.get(nk(r[c_pr])+'|'+nk(r[c_art]));
+    const rows=rr.map(r=>{ const rec=canonOf(artByPredArt.get(nk(r[c_pr])+'|'+nk(r[c_art])));
       return {date:pdate(r[c_end]),paG:rec?rec.paG:('#'+(r[c_pr]||'')+(r[c_art]||'')),hran:num(r[c_hr]),dost:num(r[c_do])}; }).filter(r=>r.date);
     return groupBy(rows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,hran:sum(rs,'hran'),dost:sum(rs,'dost')}));
   }
@@ -211,10 +263,18 @@ async function buildModel(textsOverride){
     const per={},sht={};
     groupBy(xr,r=>keyFn(r.pa),rs=>({k:keyFn(rs[0].pa),per:sum(rs,'per')})).forEach(g=>{if(g.k)per[g.k]=g.per;});
     (shtP||[]).forEach(p=>{ const k=keyFn(resolvePA(p.k)); if(k)sht[k]=(sht[k]||0)+intn(p.q); });
+    /* уровень глубины: суммируем расход и штуки по Артикул.Глубина, без предмета */
+    const perG={},shtG={};
+    (xr||[]).forEach(r=>{ const g=glubKey(r.pa); if(g)perG[g]=(perG[g]||0)+r.per; });
+    (shtP||[]).forEach(p=>{ const g=glubKey(p.k); if(g)shtG[g]=(shtG[g]||0)+intn(p.q); });
+    const puG={}; Object.keys(perG).forEach(g=>{ if(shtG[g])puG[g]=Math.round(perG[g]/shtG[g]); });
     const pu={}; Object.keys(per).forEach(k=>{ if(sht[k])pu[k]=Math.round(per[k]/sht[k]); });
     /* прячем исходники для диагностики: enumerable:false, чтобы не мешать перебору ключей */
     Object.defineProperty(pu,'_per',{value:per,enumerable:false});
     Object.defineProperty(pu,'_sht',{value:sht,enumerable:false});
+    Object.defineProperty(pu,'_puG',{value:puG,enumerable:false});
+    Object.defineProperty(pu,'_perG',{value:perG,enumerable:false});
+    Object.defineProperty(pu,'_shtG',{value:shtG,enumerable:false});
     (dim||artDim).forEach(a=>{ const kP=keyFn(a.paP),kG=keyFn(a.paG); const v=(pu[kP]!==undefined)?pu[kP]:(pu[kG]!==undefined?pu[kG]:undefined); if(v!==undefined){pu[kP]=v;pu[kG]=v;} });
     return pu;
   }
@@ -322,9 +382,11 @@ async function buildModel(textsOverride){
   if(efFin){
     const puLE=buildPU(xEF,shtEF,lnk,artDim), puAE=buildPU(xEF,shtEF,nk,artDim);
     const fbEF=buildPUfb(puLE,artDim);
-    let noPU=0,fbQty=0,fbSum=0,fbY={};
+    let noPU=0,fbQty=0,fbSum=0,fbY={},glubQty=0,glubHit=0;
     for(const r of obEF){
       let pu=puLE[lnk(r.paG)]; if(pu===undefined)pu=puAE[nk(r.paG)];
+      if(pu===undefined){ const g=glubKey(r.paG);
+        if(g&&puLE._puG[g]!==undefined){ pu=puLE._puG[g]; if(r.vyks){glubQty+=r.vyks;glubHit++;} } }
       if(pu===undefined&&r.vyks){
         noPU++;
         const a=M.artByPaG[r.paG];
@@ -353,6 +415,9 @@ async function buildModel(textsOverride){
              `${c}: ${cls[c].length} ключей / ${tot(c).toLocaleString('ru-RU')} шт`
              +(cls[c].length?` → ${fmt(cls[c])}`:'')).join(' ║ ')
          : 'себестоимость нашлась у всех ключей с выкупами'});}
+    diag.push({name:'Себестоимость: по глубине',status:'ok',rows:glubHit,
+      msg:glubQty?`ключ «Предмет+Глубина» не совпал, но нашлась глубина: ${glubQty.toLocaleString('ru-RU')} шт`
+                 :'все ключи совпали по «Предмет+Глубина», добор по глубине не понадобился'});
     diag.push({name:'Себестоимость: фолбэк',status:fbQty?'warn':'ok',rows:noPU,
       msg:fbQty?`подставлена средняя по предмету/общая для ${fbQty.toLocaleString('ru-RU')} шт`
             +` на ${Math.round(fbSum).toLocaleString('ru-RU')} ₽`
@@ -423,6 +488,7 @@ async function buildModel(textsOverride){
     let noPU=0;
     for(const r of obEZ){
       let pu=puL2[lnk(r.paG)]; if(pu===undefined)pu=puA2[nk(r.paG)];
+      if(pu===undefined){ const g=glubKey(r.paG); if(g&&puL2._puG[g]!==undefined)pu=puL2._puG[g]; }
       if(pu===undefined&&r.vyks)noPU++;
       r.perem=Math.round((pu||0)*r.vyks);
       if(r.rekWB) r.rek-=r.rekWB;    /* гасим только «Удержания WB» — штрафы остаются расходом */
@@ -573,7 +639,7 @@ async function buildModel(textsOverride){
     /* Умная сцепка и здесь: если артикул сам по себе не узнан — пробуем «Предмет+Артикул» */
     const resolveArt=(art,pred)=>{
       const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
-      if(rec)return rec.paG;
+      if(rec)return canonOf(rec).paG;
       if(pred){ const p=resolvePA(String(pred).trim()+String(art).trim(),''); if(p)return p; }
       return '#'+art;
     };
@@ -822,7 +888,8 @@ async function buildModel(textsOverride){
         const s=num(r[c_sum]);
 
         const base=art.split('_')[0]||art;
-        const rec=artByPostL.get(lnk(base))||artByPostA.get(nk(base));
+        const rec0=artByPostL.get(lnk(base))||artByPostA.get(nk(base));
+        const rec=canonOf(rec0);
         const paG=rec?rec.paG:base;
         const paP=rec?rec.paP:'';
         const key=d.getFullYear()+'-'+(d.getMonth()+1)+'|'+paG;
