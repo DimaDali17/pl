@@ -203,18 +203,76 @@ async function buildModel(textsOverride){
       return {date:pdate(r[c_end]),paG:rec?rec.paG:('#'+(r[c_pr]||'')+(r[c_art]||'')),hran:num(r[c_hr]),dost:num(r[c_do])}; }).filter(r=>r.date);
     return groupBy(rows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,hran:sum(rs,'hran'),dost:sum(rs,'dost')}));
   }
-  function buildPU(xr,shtRaw,keyFn,dim){
-    const sH2=(shtRaw&&shtRaw._headers)||[];
-    const s_pa2=col(sH2,'Предмет;Артикул поставщика','Предмет;Артикул.Глубина','Предмет;Артикул продавца','Предмет;Артикул'),s_qty2=col(sH2,'ШТ поставлено','ШТ');
+  /* В листе ШТУК колонка «Артикул поставщика» фактически содержит Артикул.Глубина —
+     общий артикул на несколько поставщицких. resolvePA приводит обе стороны
+     (Расход и ШТУК) к каноническому paG = Предмет+Артикул.Глубина, а перенос
+     pu[paG] → pu[paP] ниже раздаёт себестоимость всем артикулам этой глубины. */
+  function buildPU(xr,shtP,keyFn,dim){
     const per={},sht={};
     groupBy(xr,r=>keyFn(r.pa),rs=>({k:keyFn(rs[0].pa),per:sum(rs,'per')})).forEach(g=>{if(g.k)per[g.k]=g.per;});
-    (shtRaw||[]).forEach(r=>{ const k=keyFn(resolvePA(r[s_pa2])); if(k)sht[k]=(sht[k]||0)+intn(r[s_qty2]); });
+    (shtP||[]).forEach(p=>{ const k=keyFn(resolvePA(p.k)); if(k)sht[k]=(sht[k]||0)+intn(p.q); });
     const pu={}; Object.keys(per).forEach(k=>{ if(sht[k])pu[k]=Math.round(per[k]/sht[k]); });
+    /* прячем исходники для диагностики: enumerable:false, чтобы не мешать перебору ключей */
+    Object.defineProperty(pu,'_per',{value:per,enumerable:false});
+    Object.defineProperty(pu,'_sht',{value:sht,enumerable:false});
     (dim||artDim).forEach(a=>{ const kP=keyFn(a.paP),kG=keyFn(a.paG); const v=(pu[kP]!==undefined)?pu[kP]:(pu[kG]!==undefined?pu[kG]:undefined); if(v!==undefined){pu[kP]=v;pu[kG]=v;} });
     return pu;
   }
-  function buildCo(q2,logGroup,xr,shtRaw,dim){
-    const puL=buildPU(xr,shtRaw,lnk,dim), puA=buildPU(xr,shtRaw,nk,dim);
+  /* ── Фолбэк себестоимости ──
+     Лист ШТУК покрывает не все артикулы (особенно снятые с продажи 2021–2023),
+     и без пары «Расход ÷ ШТ поставлено» себестоимость выходила НУЛЁМ, а прибыль
+     тех лет — завышенной. Считаем среднюю по предмету, затем общую, и подставляем
+     их только там, где своей себестоимости нет. Это ОЦЕНКА, не факт. */
+  /* ── Лист ШТУК читаем ПОЗИЦИОННО из сырого CSV ──
+     На листе ДВА блока с одинаковыми заголовками:
+       левый  — «Предмет;Артикул поставщика» + «ШТ по оплатам»   (оплачено поставщику)
+       правый — «Предмет;Артикул поставщика» + «ШТ поставлено»   (реально приехало)
+     Объектное представление схлопывает дубли имён, и ключ мог браться из ЛЕВОГО
+     блока, а количество из ПРАВОГО — то есть артикулу подставлялось чужое число.
+     Поэтому берём строго правый блок: последнюю колонку «ШТ поставлено» и
+     ближайшую к ней слева колонку-ключ. */
+  function shtPairs(csvText,tag){
+    const rows=parseCSV(csvText||'');
+    if(!rows.length){ return []; }
+    const H=rows[0].map(x=>String(x==null?'':x).trim());
+    const qIdx=H.map((h,i)=>/^ШТ\s*поставлено/i.test(h)?i:-1).filter(i=>i>=0);
+    let qi=qIdx.length?qIdx[qIdx.length-1]:-1;
+    if(qi<0){ const alt=H.map((h,i)=>/^ШТ\b/i.test(h)?i:-1).filter(i=>i>=0); qi=alt.length?alt[alt.length-1]:-1; }
+    if(qi<0){ diag.push({name:'Лист ШТУК'+(tag?' '+tag:''),status:'err',rows:rows.length-1,
+        msg:`не найдена колонка «ШТ поставлено». Заголовки: ${H.filter(Boolean).join(' · ')}`}); return []; }
+    let ki=-1;
+    for(let i=qi;i>=0;i--){ if(/Предмет\s*;\s*Артикул/i.test(H[i])){ ki=i; break; } }
+    if(ki<0){ for(let i=qi;i>=0;i--){ if(/Артикул/i.test(H[i])){ ki=i; break; } } }
+    if(ki<0){ diag.push({name:'Лист ШТУК'+(tag?' '+tag:''),status:'err',rows:rows.length-1,
+        msg:`не найдена колонка-ключ слева от «${H[qi]}»`}); return []; }
+    const out=[],bad=[];
+    let tot=0;
+    for(let i=1;i<rows.length;i++){
+      const k=rows[i][ki], q=rows[i][qi];
+      if(k==null||String(k).trim()==='')continue;
+      out.push({k,q}); tot+=intn(q);
+      if(!isResolved(resolvePA(k)))bad.push(String(k).trim());
+    }
+    diag.push({name:'Лист ШТУК'+(tag?' '+tag:''),status:bad.length?'warn':'ok',rows:out.length,
+      msg:`взят ПРАВЫЙ блок: ключ [${ki}] «${H[ki]}» + кол-во [${qi}] «${H[qi]}»`
+        +` · всего колонок ${H.length} · Σ штук ${tot.toLocaleString('ru-RU')}`
+        +(bad.length?` · ⚠ ключей вне справочника: ${bad.length} → ${bad.slice(0,6).map(x=>'«'+x+'»').join(', ')}`
+                    :' · все ключи легли на справочник')});
+    return out;
+  }
+  const shtEF=shtPairs(texts.sht,''), shtEZ=shtPairs(texts.sht2,'EZFR');
+
+  function buildPUfb(pu,dim){
+    const byPred={}, all=[];
+    (dim||artDim).forEach(a=>{
+      let v=pu[lnk(a.paP)]; if(v===undefined)v=pu[lnk(a.paG)];
+      if(v!==undefined&&v>0){ (byPred[a.predmet]=byPred[a.predmet]||[]).push(v); all.push(v); } });
+    const avg=arr=>arr.length?Math.round(arr.reduce((x,y)=>x+y,0)/arr.length):0;
+    const predAvg={}; Object.keys(byPred).forEach(k=>predAvg[k]=avg(byPred[k]));
+    return {predAvg,globalAvg:avg(all)};
+  }
+  function buildCo(q2,logGroup,xr,shtP,dim){
+    const puL=buildPU(xr,shtP,lnk,dim), puA=buildPU(xr,shtP,nk,dim);
     const xGroup=groupBy(xr,r=>keyDP(r.date,r.pa),rs=>({date:rs[0].date,paG:rs[0].pa,post:sum(rs,'post'),rek:sum(rs,'rek'),rekMP:sum(rs,'rekMP'),rekBlog:sum(rs,'rekBlog')}));
     const comb=[];
     xGroup.forEach(r=>comb.push({date:r.date,paG:r.paG,rek:r.rek,rekMP:r.rekMP,rekBlog:r.rekBlog,post:r.post}));
@@ -234,10 +292,13 @@ async function buildModel(textsOverride){
   const TAX_EZ=()=>0.07;
 
   const salesEF=parseSales(raw.report,null);
-  {const ry=[...new Set(salesEF.map(r=>r.date.getFullYear()))].sort();
-   const rz=salesEF.reduce((s,r)=>s+r.zaks,0);
+  {const byY={};
+   salesEF.forEach(r=>{const y=r.date.getFullYear();const b=byY[y]||(byY[y]={z:0,v:0});b.z+=r.zaks;b.v+=r.vyks;byY[y]=b;});
+   const ry=Object.keys(byY).sort();
+   const rz=salesEF.reduce((s,r)=>s+r.zaks,0), rv=salesEF.reduce((s,r)=>s+r.vyks,0);
    diag.push({name:'report: охват',status:ry.length?'ok':'warn',rows:salesEF.length,
-     msg:`годы: ${ry.join(', ')||'—'} · заказов всего: ${rz.toLocaleString('ru-RU')} шт`});}
+     msg:`заказов ${rz.toLocaleString('ru-RU')} шт · выкупов ${rv.toLocaleString('ru-RU')} шт`
+       +` · выкупы по годам: ${ry.map(y=>y+':'+byY[y].v.toLocaleString('ru-RU')).join(' · ')}`});}
   /* EZFR: если есть еженедельный финотчёт — берём оттуда, иначе старый report2 */
   const salesEZ=parseSales(raw.report2,0.07);
   const ezOwn=xRows2.length>0;   /* у EZFR своя бухгалтерия (лист Расход EZFR) */
@@ -256,17 +317,48 @@ async function buildModel(textsOverride){
      Переменные, реклама, постоянные → из бухгалтерии (лист Расход).
      Заказы → из report (в финотчёте их нет). */
   const efFin=!!(raw.wbfin_ef&&raw.wbfin_ef.length);
-  const obEF=efFin?parseWBFin(raw.wbfin_ef,TAX_EF):buildCo(salesEF,parseLog(raw.log),xEF,raw.sht,artDim);
+  const obEF=efFin?parseWBFin(raw.wbfin_ef,TAX_EF):buildCo(salesEF,parseLog(raw.log),xEF,shtEF,artDim);
 
   if(efFin){
-    const puLE=buildPU(xEF,raw.sht,lnk,artDim), puAE=buildPU(xEF,raw.sht,nk,artDim);
-    let noPU=0;
+    const puLE=buildPU(xEF,shtEF,lnk,artDim), puAE=buildPU(xEF,shtEF,nk,artDim);
+    const fbEF=buildPUfb(puLE,artDim);
+    let noPU=0,fbQty=0,fbSum=0,fbY={};
     for(const r of obEF){
       let pu=puLE[lnk(r.paG)]; if(pu===undefined)pu=puAE[nk(r.paG)];
-      if(pu===undefined&&r.vyks)noPU++;
+      if(pu===undefined&&r.vyks){
+        noPU++;
+        const a=M.artByPaG[r.paG];
+        const est=(a&&fbEF.predAvg[a.predmet])||fbEF.globalAvg;
+        if(est){ pu=est; r.peremEst=1; fbQty+=r.vyks; fbSum+=est*r.vyks;
+                 fbY[r.y]=(fbY[r.y]||0)+est*r.vyks; }
+      }
       r.perem=Math.round((pu||0)*r.vyks);
       if(r.rekWB) r.rek-=r.rekWB;   /* удержания WB гасим — реклама идёт из бухгалтерии; штрафы остаются */
     }
+    {const miss={};
+     obEF.forEach(r=>{ if(r.peremEst&&r.vyks) miss[r.paG]=(miss[r.paG]||0)+r.vyks; });
+     const cls={'нет в Расход':[],'нет в ШТУК':[],'нет нигде':[]};
+     Object.keys(miss).forEach(k=>{
+       const kl=lnk(k), kn=nk(k);
+       const hasPer=(puLE._per[kl]!==undefined)||(puAE._per[kn]!==undefined);
+       const hasSht=(puLE._sht[kl]!==undefined)||(puAE._sht[kn]!==undefined);
+       const c=hasPer&&!hasSht?'нет в ШТУК':(!hasPer&&hasSht?'нет в Расход':(!hasPer&&!hasSht?'нет нигде':null));
+       if(c)cls[c].push([k,miss[k]]); });
+     const fmt=arr=>arr.sort((a,b)=>b[1]-a[1]).slice(0,8)
+       .map(([k,v])=>`«${k}» ${v.toLocaleString('ru-RU')} шт`).join(' · ');
+     const tot=c=>cls[c].reduce((s2,x)=>s2+x[1],0);
+     diag.push({name:'Себестоимость: где дыра',status:Object.keys(miss).length?'warn':'ok',rows:Object.keys(miss).length,
+       msg:Object.keys(miss).length
+         ? ['нет в ШТУК','нет в Расход','нет нигде'].map(c=>
+             `${c}: ${cls[c].length} ключей / ${tot(c).toLocaleString('ru-RU')} шт`
+             +(cls[c].length?` → ${fmt(cls[c])}`:'')).join(' ║ ')
+         : 'себестоимость нашлась у всех ключей с выкупами'});}
+    diag.push({name:'Себестоимость: фолбэк',status:fbQty?'warn':'ok',rows:noPU,
+      msg:fbQty?`подставлена средняя по предмету/общая для ${fbQty.toLocaleString('ru-RU')} шт`
+            +` на ${Math.round(fbSum).toLocaleString('ru-RU')} ₽`
+            +` · по годам: ${Object.keys(fbY).sort().map(y=>y+':'+Math.round(fbY[y]).toLocaleString('ru-RU')).join(' · ')}`
+            +` · общая средняя ${fbEF.globalAvg.toLocaleString('ru-RU')} ₽/шт (ОЦЕНКА — уточняется листом ШТУК)`
+          :'своя себестоимость нашлась у всех артикулов с выкупами'});
     let rekMP=0,rekBlog=0,postBuh=0;
     groupBy(xEF.filter(r=>r.rek||r.post),r=>r.date.getFullYear()+'-'+(r.date.getMonth()+1)+'|'+r.pa,
       rs=>({y:rs[0].date.getFullYear(),m:rs[0].date.getMonth()+1,paG:rs[0].pa,
@@ -320,14 +412,14 @@ async function buildModel(textsOverride){
   acGroup.forEach(r=>obEF.push({paG:r.paG,y:r.date.getFullYear(),m:r.date.getMonth()+1,acr:r.acr,zaks:0,vyks:0,zakr:0,vykr:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}));
 
   const ezFin=!!(raw.wbfin_ezfr&&raw.wbfin_ezfr.length);
-  const obEZ=ezFin?parseWBFin(raw.wbfin_ezfr,TAX_EZ):buildCo(salesEZ,parseLog(raw.log2),xEZ,raw.sht2,artDim2.length?artDim2:artDim);
+  const obEZ=ezFin?parseWBFin(raw.wbfin_ezfr,TAX_EZ):buildCo(salesEZ,parseLog(raw.log2),xEZ,shtEZ,artDim2.length?artDim2:artDim);
 
   /* ── EZFR на финотчёте + своя бухгалтерия: переменные и реклама из rashod2/sht2 ──
      Реклама берётся из БУХГАЛТЕРИИ. «Удержания» WB из финотчёта остаются в поле rekWB —
      показываем их справочно рядом (в скобках), НЕ складываем: это те же деньги. */
   if(ezFin&&ezOwn){
     const dim2=artDim2.length?artDim2:artDim;
-    const puL2=buildPU(xRows2,raw.sht2,lnk,dim2), puA2=buildPU(xRows2,raw.sht2,nk,dim2);
+    const puL2=buildPU(xRows2,shtEZ,lnk,dim2), puA2=buildPU(xRows2,shtEZ,nk,dim2);
     let noPU=0;
     for(const r of obEZ){
       let pu=puL2[lnk(r.paG)]; if(pu===undefined)pu=puA2[nk(r.paG)];
@@ -604,6 +696,13 @@ async function buildModel(textsOverride){
       msg:Object.keys(byY).sort().map(y=>{const b=byY[y];
         return `${y}: ком ${b.g?(((b.g-b.p)/b.g)*100).toFixed(1):'—'}% · строк ${b.n}`
           +` · gross без net: ${b.z} · net>gross: ${b.neg}`;}).join(' │ ')});
+    {const vy={};
+     rr.forEach(r=>{ const d=pdate(r[c_date]); if(!d)return;
+       const rs=(r[c_reason]||'').trim(); if(rs!=='Продажа'&&rs!=='Возврат')return;
+       const sg=(r[c_doctype]||'').trim()==='Продажа'?1:-1;
+       vy[d.getFullYear()]=(vy[d.getFullYear()]||0)+sg*intn(r[c_qty]); });
+     diag.push({name:'Финотчёт: выкупы по годам',status:'ok',rows:0,
+       msg:Object.keys(vy).sort().map(y=>`${y}: ${vy[y].toLocaleString('ru-RU')} шт`).join(' │ ')});}
     diag.push({name:'Финотчёт: потери выкупов',status:(skip.noDate||skip.noArt)?'warn':'ok',rows:0,
       msg:`Продажа ${skip.saleQty.toLocaleString('ru-RU')} шт − Возврат ${skip.retQty.toLocaleString('ru-RU')} шт`
         +` = нетто ${(skip.saleQty-skip.retQty).toLocaleString('ru-RU')} шт`
