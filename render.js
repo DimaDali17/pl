@@ -49,10 +49,10 @@ function render(){
     for(const r of M.obshiy){ if(r.y!==y||!mset.has(r.m)||!searchOK(r))continue; const d=dimOf(r); acc[d]=(acc[d]||0)+r.vykr; ord[d]=(ord[d]||0)+r.zaks; }
     let dims=Object.keys(acc).sort((a,b)=>acc[b]-acc[a]);
     if(grpMode==='artikul'){
-      const big=dims.filter(d=>ord[d]>=100), small=dims.filter(d=>ord[d]<100);
-      rows=big.map(D=>({label:D,v:meas(y,slicerMonths,r=>r.paG===D&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>r.paG===D&&searchOK(r)):null}));
-      if(small.length){ const sset=new Set(small);
-        rows.push({label:`Прочее (${small.length} арт. <100 заказов)`,v:meas(y,slicerMonths,r=>sset.has(r.paG)&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>sset.has(r.paG)&&searchOK(r)):null}); }
+      /* Показываем ВСЕ артикулы. Схлопывание «<100 заказов → Прочее» убрано:
+         оно прятало и мелочь, и артикулы с битым ключом, из-за чего проблемы
+         в данных было не видно. */
+      rows=dims.map(D=>({label:D,v:meas(y,slicerMonths,r=>r.paG===D&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>r.paG===D&&searchOK(r)):null}));
     } else {
       rows=dims.map(D=>({label:D,v:meas(y,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)):null}));
     }
@@ -105,7 +105,7 @@ function render(){
     {l:'Выкуп %',v:fp(tot.v.vkp)}
   ];
   document.getElementById('kpi').innerHTML=kpi.map(k=>`<div class="mc"><div class="ml">${k.l}</div><div class="mv ${k.c||''}">${k.v}</div>${k.d?`<div class="md">${k.d}</div>`:''}</div>`).join('');
-  document.getElementById('matrixTtl').textContent = grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам (заказы ≥100, остальное → Прочее)';
+  document.getElementById('matrixTtl').textContent = grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам';
   const msLbl=selMonths.size&&selMonths.size<12?' · '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'';
   document.getElementById('matrixSub').textContent=`год ${y}${msLbl}${q?' · '+q:''}`;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
