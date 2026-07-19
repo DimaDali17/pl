@@ -129,10 +129,10 @@ async function buildModel(textsOverride){
     if(!rawS) return fallback===undefined?'':fallback;
     const n=nk(rawS);
     const rec=artKeyIndex.get(n);
-    if(rec) return canonOf(rec).paG;
+    if(rec) return rec.paG;
     for(let i=0;i<artSuffix.length;i++){
       const art=artSuffix[i][0];
-      if(art.length>2&&n.endsWith(art)) return canonOf(artSuffix[i][1]).paG;
+      if(art.length>2&&n.endsWith(art)) return artSuffix[i][1].paG;
     }
     return fallback===undefined?rawS:fallback;
   }
@@ -154,7 +154,10 @@ async function buildModel(textsOverride){
        глубины нет           → сам ПРЕДМЕТ («Боди», «Водолазки» — бухгалтерия по предмету)
        нет и предмета        → артикул поставщика (последняя соломинка) */
   const deepKey=r=>r?(nk(r.glub||'')||nk(r.predmet||'')||nk(r.post||'')):'';
-  function glubKey(sv){ return deepKey(recOf(sv)); }
+  /* глубины, размазанные больше чем по 2 предметам, для расчёта себестоимости
+     непригодны — по ним нельзя складывать расход и штуки */
+  const glubBad=new Set();
+  function glubKey(sv){ const k=deepKey(recOf(sv)); return glubBad.has(k)?'':k; }
   /* ── Канонический ключ строки P&L ──
      Одна глубина = одна строка. TB21white и TB21black схлопываются в TB21black.
      Предмет берём ПЕРВЫЙ по справочнику для этой глубины: у ВБ один и тот же
@@ -163,12 +166,17 @@ async function buildModel(textsOverride){
   const glubCanon=new Map();
   [].concat(artDim,artDim2).forEach(a=>{ const g=deepKey(a);
     if(g&&!glubCanon.has(g))glubCanon.set(g,a); });
+  /* ВНИМАНИЕ: canonOf НЕ применяется к ключам расчёта. В справочнике одна глубина
+     стоит у 13 разных предметов («essбандалеткибеж»), и канонизация стягивала
+     несвязанные товары в один ключ — расход переставал сходиться с финотчётом.
+     Используется только в диагностике «Глубина: разные предметы». */
   const canonOf=rec=>{ if(!rec)return rec; const g=deepKey(rec);
     return (g&&glubCanon.get(g))||rec; };
   {const multi=new Map();
    [].concat(artDim,artDim2).forEach(a=>{ const g=deepKey(a); if(!g)return;
      if(!multi.has(g))multi.set(g,new Set()); multi.get(g).add(a.predmet); });
    const bad=[...multi.entries()].filter(([g,st])=>st.size>1);
+   bad.forEach(([g,st])=>{ if(st.size>2)glubBad.add(g); });
    /* откуда взялся предмет: из колонки «Предмет» или восстановлен из «Сцепки» */
    const srcCnt={};
    [].concat(artDim,artDim2).forEach(a=>{ const k=a.predSrc||'—'; srcCnt[k]=(srcCnt[k]||0)+1; });
@@ -260,7 +268,7 @@ async function buildModel(textsOverride){
       c_vyks=col(H,'Выкупили, шт.','Выкупили шт'),c_den=col(H,'День','Дата');
     const TAX=new Date(2026,1,1); const out=[];
     rr.forEach(r=>{ const d=pdate(r[c_den]); if(!d)return; const post=(r[c_post]||'').trim();
-      const rec=canonOf(artByPostL.get(lnk(post))||artByPostA.get(nk(post))); const paG=rec?rec.paG:('#'+post);
+      const rec=artByPostL.get(lnk(post))||artByPostA.get(nk(post)); const paG=rec?rec.paG:('#'+post);
       const perech=num(r[c_per]); const nalog=taxFlat!=null?Math.round(perech*taxFlat):Math.round(perech*(d>=TAX?0.12:0.07));
       out.push({date:d,paG,zaks:intn(r[c_zaks]),vyks:intn(r[c_vyks]),zakr:num(r[c_zakr]),vykr:perech,kom:0,nalog}); });
     return out;
@@ -268,7 +276,7 @@ async function buildModel(textsOverride){
   function parseLog(rr){
     if(!rr||!rr.length)return[]; const H=rr._headers;
     const c_end=col(H,'Период конец'),c_art=col(H,'Артикул'),c_pr=col(H,'Предмет'),c_hr=col(H,'Хранение'),c_do=col(H,'Доставка');
-    const rows=rr.map(r=>{ const rec=canonOf(artByPredArt.get(nk(r[c_pr])+'|'+nk(r[c_art])));
+    const rows=rr.map(r=>{ const rec=artByPredArt.get(nk(r[c_pr])+'|'+nk(r[c_art]));
       return {date:pdate(r[c_end]),paG:rec?rec.paG:('#'+(r[c_pr]||'')+(r[c_art]||'')),hran:num(r[c_hr]),dost:num(r[c_do])}; }).filter(r=>r.date);
     return groupBy(rows,r=>keyDP(r.date,r.paG),rs=>({date:rs[0].date,paG:rs[0].paG,hran:sum(rs,'hran'),dost:sum(rs,'dost')}));
   }
@@ -656,7 +664,7 @@ async function buildModel(textsOverride){
     /* Умная сцепка и здесь: если артикул сам по себе не узнан — пробуем «Предмет+Артикул» */
     const resolveArt=(art,pred)=>{
       const rec=artByPostL.get(lnk(art))||artByPostA.get(nk(art));
-      if(rec)return canonOf(rec).paG;
+      if(rec)return rec.paG;
       if(pred){ const p=resolvePA(String(pred).trim()+String(art).trim(),''); if(p)return p; }
       return '#'+art;
     };
@@ -905,8 +913,7 @@ async function buildModel(textsOverride){
         const s=num(r[c_sum]);
 
         const base=art.split('_')[0]||art;
-        const rec0=artByPostL.get(lnk(base))||artByPostA.get(nk(base));
-        const rec=canonOf(rec0);
+        const rec=artByPostL.get(lnk(base))||artByPostA.get(nk(base));
         const paG=rec?rec.paG:base;
         const paP=rec?rec.paP:'';
         const key=d.getFullYear()+'-'+(d.getMonth()+1)+'|'+paG;
