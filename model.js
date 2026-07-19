@@ -186,6 +186,15 @@ async function buildModel(textsOverride){
      return `«${g}»: ${rows.map(a=>`${a.predmet}[${a.predSrc||'—'}]`).slice(0,6).join(' / ')}`
        +` → оставлен «${win?win.predmet:''}»`;
    }).join(' ║ ');
+   /* поимённый список: какой артикул под каким предметом записан.
+      Это готовый чек-лист для правки справочника. */
+   const fix=bad.slice(0,3).map(([g,st])=>{
+     const rows=[].concat(artDim,artDim2).filter(a=>deepKey(a)===g);
+     return `глубина «${g}»: `+rows.map(a=>`${a.post||'(без арт)'}→«${a.predmet}»`).join(', ');
+   }).join(' ║ ');
+   if(bad.length) diag.push({name:'Справочник: что чинить',status:'warn',rows:bad.length,
+     msg:fix+' ║ у всех строк одной глубины предмет должен быть ОДИН — сейчас он разный, '
+       +'и выручка одного товара разносится по нескольким предметам'});
    const noGlub=[].concat(artDim,artDim2).filter(a=>!nk(a.glub||'')).length;
    diag.push({name:'Глубина: разные предметы',status:bad.length?'warn':'ok',rows:bad.length,
      msg:(bad.length?`глубин с несколькими предметами: ${bad.length} (схлопнуты в один ключ) · `+detail
@@ -456,6 +465,17 @@ async function buildModel(textsOverride){
       .forEach(g=>{ rekMP+=g.rekMP; rekBlog+=g.rekBlog; postBuh+=g.post;
         obEF.push({paG:g.paG,y:g.y,m:g.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,
           rek:g.rek,rekMP:g.rekMP,rekBlog:g.rekBlog,rekWB:0,post:g.post,nalog:0,hran:0,dost:0,perem:0}); });
+    /* Покрытие: месяцы, где report видит выкупы, а финотчёт — нет (дыра в бэкапе) */
+    {const finM={},repM={};
+     obEF.forEach(r=>{ if(r.vyks)finM[r.y+'-'+String(r.m).padStart(2,'0')]=1; });
+     salesEF.forEach(r=>{ if(r.vyks){const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');
+       repM[k]=(repM[k]||0)+r.vyks;} });
+     const holes=Object.keys(repM).filter(k=>!finM[k]).sort();
+     diag.push({name:'Финотчёт: дыры в покрытии',status:holes.length?'warn':'ok',rows:holes.length,
+       msg:holes.length?`месяцев без финотчёта, но с выкупами в report: ${holes.length} → `
+             +holes.map(k=>`${k} (${repM[k].toLocaleString('ru-RU')} шт)`).join(' · ')
+             +` · за эти месяцы будут заказы, но нулевая выручка — нужны недельные файлы в бэкап`
+           :'финотчёт покрывает все месяцы, где report видит выкупы'});}
     /* Заказы: финотчёт → report → доставки (см. fixOrders) */
     fixOrders(obEF,salesEF,'EF');
     /* ── Хранение: добор из листа «Лог+Хран» ──
