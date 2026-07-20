@@ -7,7 +7,9 @@ function monthCompleted(y,m){
 }
 function monthsWithData(y){
   const s=new Set();
-  for(const r of M.obshiy){ if((!y||r.y===y)&&(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem)) s.add(r.m); }
+  /* в срезе «Всё время» год не фильтруем — иначе чипсы гаснут без причины */
+  const anyY=(typeof grpMode!=='undefined'&&grpMode==='ym');
+  for(const r of M.obshiy){ if((anyY||!y||r.y===y)&&(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem)) s.add(r.m); }
   return s;
 }
 function renderMonthChips(){
@@ -28,7 +30,7 @@ function monthsAll(){ selMonths=new Set(); renderMonthChips(); render(); }
 
 
 let _t; function debouncedRender(){clearTimeout(_t);_t=setTimeout(render,250);}
-function setGrp(g){grpMode=g;document.querySelectorAll('#grp button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));render();}
+function setGrp(g){grpMode=g;document.querySelectorAll('#grp button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));renderMonthChips();render();}
 /* Кнопка среза «Всё время»: строки = год-месяц по всей истории, в одном листе */
 function ensureAllBtn(){
   const box=document.getElementById('grp'); if(!box)return;
@@ -108,9 +110,11 @@ function render(){
   /* строки в зависимости от среза */
   let rows=[];
   if(grpMode==='ym'){
-    /* Все месяцы всей истории. Фильтр по году и чипсы месяцев игнорируются. */
+    /* Строки = год-месяц по всей истории. Срез задаёт только РАЗБИВКУ:
+       чипсы месяцев продолжают фильтровать, фильтр года — нет (в том и смысл среза). */
+    const mset=new Set(slicerMonths);
     const seen=new Set();
-    for(const r of M.obshiy){ if(!searchOK(r))continue;
+    for(const r of M.obshiy){ if(!searchOK(r))continue; if(!mset.has(r.m))continue;
       if(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem) seen.add(r.y+'-'+String(r.m).padStart(2,'0')); }
     rows=[...seen].sort().map(k=>{ const yy=+k.slice(0,4), mm=+k.slice(5);
       return {label:`${MONTHS[mm-1].slice(0,3)} ${yy}`,v:meas(yy,[mm],searchOK),py:null}; });
@@ -133,7 +137,7 @@ function render(){
   /* Итог: незавершённые месяцы (текущий и будущие) в сумму НЕ входят. */
   const totMonths=slicerMonths.filter(m=>monthCompleted(y,m));
   const tot=(grpMode==='ym')
-    ? {label:'Всего за всё время',v:meas(0,[1,2,3,4,5,6,7,8,9,10,11,12],searchOK),py:null}
+    ? {label:'Всего за всё время',v:meas(0,slicerMonths,searchOK),py:null}
     : {label:'Всего',v:meas(y,totMonths,searchOK),py:pyOn?meas(y-1,totMonths,searchOK):null};
 
   /* max для баров */
@@ -183,7 +187,8 @@ function render(){
   document.getElementById('kpi').innerHTML=kpi.map(k=>`<div class="mc"><div class="ml">${k.l}</div><div class="mv ${k.c||''}">${k.v}</div>${k.d?`<div class="md">${k.d}</div>`:''}</div>`).join('');
   document.getElementById('matrixTtl').textContent = grpMode==='ym'?'P&L за всё время (по месяцам)':grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам';
   const msLbl=selMonths.size&&selMonths.size<12?' · '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'';
-  const ymLbl=(grpMode==='ym')?'вся история':'';
+  const ymLbl=(grpMode==='ym')?('вся история'+(selMonths.size&&selMonths.size<12
+      ?' · только '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'')):'';
   const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus)?' · + колонки без баллов':'';
   document.getElementById('matrixSub').textContent=(ymLbl||`год ${y}${msLbl}`)+(q?' · '+q:'')+ozLbl;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
