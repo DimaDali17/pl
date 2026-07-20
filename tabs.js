@@ -69,9 +69,29 @@ function chartBL(labels,bars,line,o){
   labels.forEach((L,i)=>{s+=`<text x="${lx(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9.5" fill="var(--ink3)">${L}</text>`;});
   return s+'</svg>';
 }
-function chartCard(title,legend,svg){return `<div class="chartbox" style="margin-bottom:14px"><div class="chartttl">${title}</div><div class="leg">${legend}</div><div class="svgbox">${svg}</div></div>`;}
+function chartCard(title,legend,svg){return `<div class="chartbox" style="margin-bottom:14px"><div class="chartttl">${title}</div><div class="leg" style="display:flex;align-items:center;gap:10px">${legend}${scopeToggle()}</div><div class="svgbox">${svg}</div></div>`;}
 const legItem=(c,txt,op)=>`<span><i style="background:${c};${op?'opacity:'+op:''}"></i>${txt}</span>`;
 const mns3=MONTHS.map(x=>x.slice(0,3));
+
+/* ═══ Масштаб графиков: месяцы выбранного года ↔ годы за всю историю ═══ */
+let chartScope='month';
+function setScope(sc){ chartScope=sc; renderTab(); }
+function scopeToggle(){
+  return `<span class="scopesw" style="margin-left:auto;display:inline-flex;gap:4px">`
+    +`<button class="mchip ${chartScope==='month'?'on':''}" onclick="setScope('month')" title="Месяцы выбранного года">Месяцы</button>`
+    +`<button class="mchip ${chartScope==='year'?'on':''}" onclick="setScope('year')" title="Все годы за всю историю">Годы</button>`
+    +`</span>`;
+}
+const scopeYears=()=>[...(M.years||[])].sort((a,b)=>a-b);
+function scopeAxis(){ return chartScope==='year' ? scopeYears().map(String) : mns3; }
+/* fn(год, массивМесяцев) → число */
+function scopeSeries(fn){
+  const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
+  if(chartScope==='year') return scopeYears().map(yy=>fn(yy,ALL));
+  const y=+document.getElementById('fYear').value;
+  return ALL.map(m=>fn(y,[m]));
+}
+const scopeTtl=y=>chartScope==='year'?'по годам · вся история':`по месяцам · ${y}`;
 function renderTab(){
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
@@ -86,18 +106,18 @@ function renderTab(){
     {l:'Вкп%',t:'Выкуп,шт ÷ Заказ,шт',fn:(m,f)=>fp(meas(y,m,f).vkp)},
   ];
   if(curTab==='adv'){
-    const rekM=all.map(m=>meas(y,[m],searchOK).rek), drrM=all.map(m=>meas(y,[m],searchOK).drr);
-    const chart=chartCard(`Реклама и ДРР.Or% по месяцам · ${y}`,
+    const rekM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).rek), drrM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).drr);
+    const chart=chartCard(`Реклама и ДРР ${scopeTtl(y)}`,
       legItem('var(--amber)','Реклама, ₽',.7)+legItem('var(--blue)','ДРР.Or%'),
-      chartBL(mns3,rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf}));
+      chartBL(scopeAxis(),rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf}));
     const cols=[
       {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
-      {l:'Выкуп,руб',t:'Выручка (gross): «ВБ реализовал» из финотчёта — что заплатил покупатель',fn:(m,f)=>fi(meas(y,m,f).vykr)},
+      {l:'Выкуп,руб',t:'Выручка (gross) из финотчёта маркетплейса — что заплатил покупатель. У Ozon — Выручка + Баллы за скидки',fn:(m,f)=>fi(meas(y,m,f).vykr)},
       {l:'Реклама',t:'Расходы на рекламу (лист расход, группа «Реклама»). Для завершённых месяцев c апр.2026: если <30 000 ₽ → 300 000 ₽ (оценка)',fn:(m,f)=>fi(meas(y,m,f).rek)},
-      {l:'Рекл.ВБ',t:'Реклама на площадке: строки листа Расход, где «Конкретнее» = реклама WB / продвижение / джем',fn:(m,f)=>fi(meas(y,m,f).rekMP)},
+      {l:'Рекл.МП',t:'Реклама на площадке: строки листа Расход, где «Конкретнее» = реклама WB/Ozon, продвижение, джем, трафареты',fn:(m,f)=>fi(meas(y,m,f).rekMP)},
       {l:'Блогеры',t:'Внешнее продвижение: интеграции, блогеры — всё, что в «Конкретнее» не опознано как площадка',fn:(m,f)=>fi(meas(y,m,f).rekBlog)},
       {l:'Блог%',t:'Доля блогеров в рекламе',fn:(m,f)=>fp1(meas(y,m,f).rekBlogP)},
-      {l:'Удерж.WB',t:'«Удержания» из финотчёта WB (WB Продвижение, Джем). Справочно — это те же деньги, что «Рекл.ВБ» в бухгалтерии, НЕ складываются',fn:(m,f)=>{const v=meas(y,m,f).rekWB;return v?fi(v):'—';}},
+      {l:'Удерж.МП',t:'«Удержания» из финотчёта маркетплейса (Продвижение, Джем). Справочно — это те же деньги, что «Рекл.МП» в бухгалтерии, НЕ складываются',fn:(m,f)=>{const v=meas(y,m,f).rekWB;return v?fi(v):'—';}},
       {l:'ДРР.Sa%',t:'Реклама ÷ Выкуп,руб (ДРР от продаж)',fn:(m,f)=>fp1(meas(y,m,f).drrSa)},
       {l:'ДРР.Or%',t:'Реклама ÷ Заказ,руб (ДРР от заказов)',fn:(m,f)=>fp1(meas(y,m,f).drr)},
       {l:'Adv.CPO',t:'Реклама ÷ Заказ,шт (стоимость на заказ)',fn:(m,f)=>fi(meas(y,m,f).advCPO)},
@@ -105,13 +125,13 @@ function renderTab(){
     ];
     tabTables(el,chart,'Реклама','ДРР.Order — от заказов · ДРР.Sale — от выкупов',cols,y,q,sM);
   } else if(curTab==='log'){
-    const dostM=all.map(m=>meas(y,[m],searchOK).dost), cpsM=all.map(m=>meas(y,[m],searchOK).logCPS);
-    const chart=chartCard(`Доставка и Log.CPS по месяцам · ${y}`,
+    const dostM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).dost), cpsM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).logCPS);
+    const chart=chartCard(`Доставка и Log.CPS ${scopeTtl(y)}`,
       legItem('var(--blue)','Доставка, ₽',.6)+legItem('var(--amber)','Log.CPS (на выкуп)'),
-      chartBL(mns3,dostM,cpsM,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf}));
+      chartBL(scopeAxis(),dostM,cpsM,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf}));
     const cols=base.concat([
-      {l:'Доставка',t:'Доставка (лист Лог+Хран)',fn:(m,f)=>fi(meas(y,m,f).dost)},
-      {l:'Хранение',t:'Хранение (лист Лог+Хран)',fn:(m,f)=>fi(meas(y,m,f).hran)},
+      {l:'Доставка',t:'Логистика маркетплейса из финотчёта (доставка, приёмка, возмещение издержек)',fn:(m,f)=>fi(meas(y,m,f).dost)},
+      {l:'Хранение',t:'Хранение. У WB — из финотчёта; за 2021–2024 добирается из листа «Лог+Хран». У Ozon отдельной статьи нет — входит в Доставку',fn:(m,f)=>fi(meas(y,m,f).hran)},
       {l:'Дост%',t:'Доставка ÷ Выкуп,руб',fn:(m,f)=>fp1(meas(y,m,f).dostP)},
       {l:'Хран%',t:'Хранение ÷ Выкуп,руб',fn:(m,f)=>fp1(meas(y,m,f).hranP)},
       {l:'Log.CPS',t:'Доставка ÷ Выкуп,шт',fn:(m,f)=>fi(meas(y,m,f).logCPS)},
@@ -121,9 +141,9 @@ function renderTab(){
   } else if(curTab==='fix'){
     const hasPost=M.postR.length>0;
     const postSum=(mArr)=>{const ms=new Set(mArr);return M.postR.filter(r=>r.y===y&&ms.has(r.m)).reduce((s,r)=>s+r.summa,0);};
-    const postM=all.map(m=>meas(y,[m],searchOK).postAkr);
-    const chart=chartCard(`Пост.Р(+акр) по месяцам · ${y}`,legItem('#5B3FA0','Пост.Р(+акр), ₽',.6),
-      chartBL(mns3,postM,all.map(_=>NaN),{barColor:'#5B3FA0',barFmt:kf}));
+    const postM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).postAkr);
+    const chart=chartCard(`Пост.Р(+акр) ${scopeTtl(y)}`,legItem('#5B3FA0','Пост.Р(+акр), ₽',.6),
+      chartBL(scopeAxis(),postM,postM.map(_=>NaN),{barColor:'#5B3FA0',barFmt:kf}));
     const cols=base.concat([
       {l:'Постоянные',t:'Постоянные расходы (лист расход, «Пост расходы») с откатом на пр. месяц если 0',fn:(m,f)=>fi(meas(y,m,f).postAkr-meas(y,m,f).acr)},
       {l:'Акруалс',t:'Акруалс (отдельный лист Acruals)',fn:(m,f)=>fi(meas(y,m,f).acr)},
@@ -132,11 +152,11 @@ function renderTab(){
     ]);
     tabTables(el,chart,'Постоянные расходы',hasPost?'Fix.CPO из «ПОСТ затраты архив»':'Fix.CPO — добавьте лист «ПОСТ затраты архив»',cols,y,q,sM);
   } else if(curTab==='check'){
-    const bars=all.map(m=>meas(y,[m],searchOK).zaks);
-    const line=all.map(m=>meas(y,[m],searchOK).srchek);
-    const chart=chartCard(`Заказ,шт и Ср.Чек по месяцам · ${y}`,
+    const bars=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).zaks);
+    const line=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).srchek);
+    const chart=chartCard(`Заказ,шт и Ср.Чек ${scopeTtl(y)}`,
       legItem('var(--blue)','Заказ,шт',.5)+legItem('var(--amber)','Ср.Чек Заказа'),
-      chartBL(mns3,bars,line,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf}));
+      chartBL(scopeAxis(),bars,line,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf}));
     const cols=[
       {l:'Заказ,шт',t:'Заказано штук',fn:(m,f)=>fi(meas(y,m,f).zaks)},
       {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
