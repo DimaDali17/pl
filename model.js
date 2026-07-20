@@ -438,11 +438,31 @@ async function buildModel(textsOverride){
   if(efFin){
     const puLE=buildPU(xEF,shtEF,lnk,artDim), puAE=buildPU(xEF,shtEF,nk,artDim);
     const fbEF=buildPUfb(puLE,artDim);
+    /* ── Ставка себестоимости «Прочее» ──
+       Часть старых артикулов (Водолазки, Велосипедки) в листе Расход давно слиты
+       в «Прочее», а в ШТУК их добавлять не хотим. Поэтому ставку выводим сами:
+         затраты «Прочее» (из buildPU._per) ÷ выкуплено штук под ключами «Прочее».
+       Если пары нет — откат на общую среднюю. Всё считается из данных, без констант. */
+    let puProchee=puLE[lnk('Прочее')];
+    if(puProchee===undefined)puProchee=puAE[nk('Прочее')];
+    if(puProchee===undefined){ const g=glubKey('Прочее'); if(g)puProchee=puLE._puG[g]; }
+    if(puProchee===undefined){
+      const perPr=(puLE._per[lnk('Прочее')]||0)+(nk('Прочее')!==lnk('Прочее')?(puAE._per[nk('Прочее')]||0):0);
+      let qPr=0; obEF.forEach(r=>{ if(r.vyks&&nk(r.paG).indexOf('прочее')>=0)qPr+=r.vyks; });
+      if(perPr>0&&qPr>0)puProchee=Math.round(perPr/qPr);
+    }
+    if(puProchee===undefined||!(puProchee>0))puProchee=fbEF.globalAvg;   /* последний откат */
+    let prQty=0,prSum=0; const prKeys={};
     let noPU=0,fbQty=0,fbSum=0,fbY={},glubQty=0,glubHit=0;
     for(const r of obEF){
       let pu=puLE[lnk(r.paG)]; if(pu===undefined)pu=puAE[nk(r.paG)];
       if(pu===undefined){ const g=glubKey(r.paG);
         if(g&&puLE._puG[g]!==undefined){ pu=puLE._puG[g]; if(r.vyks){glubQty+=r.vyks;glubHit++;} } }
+      /* «Прочее»: часть старых артикулов (Водолазки, Велосипедки и пр.) в листе Расход
+         давно переименована в «Прочее», своей строки затрат у них нет. Берём
+         себестоимость этого сборного ключа — она ближе к правде, чем общая средняя. */
+      if(pu===undefined&&puProchee!==undefined){ pu=puProchee;
+        if(r.vyks){prQty+=r.vyks;prSum+=puProchee*r.vyks;prKeys[r.paG]=(prKeys[r.paG]||0)+r.vyks;} }
       if(pu===undefined&&r.vyks){
         noPU++;
         const a=M.artByPaG[r.paG];
@@ -471,6 +491,14 @@ async function buildModel(textsOverride){
              `${c}: ${cls[c].length} ключей / ${tot(c).toLocaleString('ru-RU')} шт`
              +(cls[c].length?` → ${fmt(cls[c])}`:'')).join(' ║ ')
          : 'себестоимость нашлась у всех ключей с выкупами'});}
+    diag.push({name:'Себестоимость: из «Прочее»',status:prQty?'warn':'ok',rows:Object.keys(prKeys).length,
+      msg:puProchee===undefined
+        ? '⚠ ставка не определилась'
+        : (prQty?`ставка «Прочее» ${Math.round(puProchee).toLocaleString('ru-RU')} ₽/шт применена к `
+            +`${prQty.toLocaleString('ru-RU')} шт на ${Math.round(prSum).toLocaleString('ru-RU')} ₽ · `
+            +Object.entries(prKeys).sort((a,b)=>b[1]-a[1]).slice(0,6)
+              .map(([k,v])=>`«${k}» ${v.toLocaleString('ru-RU')} шт`).join(' · ')
+          :`ставка «Прочее» ${Math.round(puProchee).toLocaleString('ru-RU')} ₽/шт · применять не пришлось`)});
     diag.push({name:'Себестоимость: по глубине',status:'ok',rows:glubHit,
       msg:glubQty?`ключ «Предмет+Глубина» не совпал, но нашлась глубина: ${glubQty.toLocaleString('ru-RU')} шт`
                  :'все ключи совпали по «Предмет+Глубина», добор по глубине не понадобился'});
@@ -716,6 +744,7 @@ async function buildModel(textsOverride){
     const c_reason=col(H,'Обоснование для оплаты','Reason for Payment');
     const c_doctype=col(H,'Тип документа','Document Type');
     const c_date=col(H,'Дата продажи','Sale Date');
+    const c_odate=col(H,'Дата заказа покупателем','Order Date by the Buyer','Дата заказа');
     const c_qty=col(H,'Кол-во','Quantity');
     const c_retail=col(H,'Вайлдберриз реализовал Товар (Пр)','Вайлдберриз реализовал Товар','Вайлдберриз реализовал товар (Пр)','Wildberries Realized Goods (Pr)');
     const c_pay=col(H,'К перечислению Продавцу за реализованный Товар','К перечислению Продавцу','Amount to Transfer to the Seller for the Realized Goods');
@@ -897,6 +926,29 @@ async function buildModel(textsOverride){
        vy[d.getFullYear()]=(vy[d.getFullYear()]||0)+sg*intn(r[c_qty]); });
      diag.push({name:'Финотчёт: выкупы по годам',status:'ok',rows:0,
        msg:Object.keys(vy).sort().map(y=>`${y}: ${vy[y].toLocaleString('ru-RU')} шт`).join(' │ ')});}
+    /* ── ЗАМЕР: как легли бы выкупы при привязке к ДАТЕ ЗАКАЗА ──
+       Ничего не меняет, только считает. Нужен, чтобы решить, стоит ли
+       перевешивать модель с «Даты продажи» на «Дату заказа покупателем». */
+    if(c_odate){
+      const byS={},byO={}; let noOd=0,tot=0,shift=0;
+      rr.forEach(r=>{ const rs=(r[c_reason]||'').trim();
+        if(rs!=='Продажа'&&rs!=='Возврат')return;
+        const ds=pdate(r[c_date]); if(!ds)return;
+        const sg=(r[c_doctype]||'').trim()==='Продажа'?1:-1, q=sg*intn(r[c_qty]);
+        tot+=q; byS[ds.getFullYear()]=(byS[ds.getFullYear()]||0)+q;
+        const dо=pdate(r[c_odate]);
+        if(!dо){noOd+=Math.abs(q);return;}
+        byO[dо.getFullYear()]=(byO[dо.getFullYear()]||0)+q;
+        if(dо.getFullYear()!==ds.getFullYear()||dо.getMonth()!==ds.getMonth())shift+=Math.abs(q);
+      });
+      const ys=[...new Set(Object.keys(byS).concat(Object.keys(byO)))].sort();
+      diag.push({name:'Замер: привязка к ДАТЕ ЗАКАЗА',status:'ok',rows:0,
+        msg:`колонка: ${JSON.stringify(c_odate)} · без даты заказа: ${noOd.toLocaleString('ru-RU')} шт`
+          +` · сменили бы месяц: ${shift.toLocaleString('ru-RU')} шт (${tot?(shift/tot*100).toFixed(1):'—'}%)`
+          +' ║ выкупы по годам, продажа → заказ: '
+          +ys.map(y=>`${y}: ${(byS[y]||0).toLocaleString('ru-RU')} → ${(byO[y]||0).toLocaleString('ru-RU')}`).join(' · ')
+          +' ║ сравни правую колонку с «report: охват» — если сойдётся, привязка к заказу даст ту же нарезку, что PBI'});
+    }
     diag.push({name:'Финотчёт: потери выкупов',status:(skip.noDate||skip.noArt)?'warn':'ok',rows:0,
       msg:`Продажа ${skip.saleQty.toLocaleString('ru-RU')} шт − Возврат ${skip.retQty.toLocaleString('ru-RU')} шт`
         +` = нетто ${(skip.saleQty-skip.retQty).toLocaleString('ru-RU')} шт`
@@ -1121,7 +1173,7 @@ async function buildModel(textsOverride){
     const r0=n=>Math.round(n).toLocaleString('ru-RU');
     diag.push({name:'Ozon: разбор выручки',status:'ok',rows:out.length,
       msg:`Выручка ${r0(T.sales)} · Баллы ${r0(T.bonus)} · Возврат ${r0(T.ret)} · Партнёры ${r0(T.partner)}`
-        +` → Выкуп,руб (деньги клиента) ${r0(T.vykr)}`
+        +` → Выкуп,руб (выручка+баллы) ${r0(T.vykr)} · деньги клиента ${r0(T.sales+T.ret)}`
         +` · Ком.МП номинальная ${r0(T.kom)} (${T.tax?(T.kom/T.tax*100).toFixed(1):'—'}% от базы «выручка+баллы»)`
         +` · если вычесть баллы: ${r0(T.komReal)} (справочно, в P&L НЕ используется)`
         +` · база налога ${r0(T.tax)}`
