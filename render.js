@@ -66,7 +66,13 @@ function ensureOzBtn(){
 /* Колонки: основные + (по кнопке) набор «без Баллов» справа */
 function activeCols(){
   const nb=(curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus;
-  return nb?COLS.concat(COLS_NB):COLS;
+  if(!nb)return COLS;
+  const byK={}; COLS_NB.forEach(c=>byK[c.k]=c);
+  const out=[];
+  COLS.forEach(c=>{ out.push(c);
+    const nbk=NB_AFTER[c.k];               /* парная колонка встаёт сразу справа */
+    if(nbk&&byK[nbk])out.push(byK[nbk]); });
+  return out;
 }
 /* Универсальные подписи в навигации: «Комиссия ВБ» → «Комиссия», прочие ВБ → МП */
 function fixNavLabels(){
