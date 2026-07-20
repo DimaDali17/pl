@@ -31,8 +31,30 @@ let _t; function debouncedRender(){clearTimeout(_t);_t=setTimeout(render,250);}
 function setGrp(g){grpMode=g;document.querySelectorAll('#grp button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));render();}
 function togglePY(){pyOn=!pyOn;document.getElementById('pyBtn').classList.toggle('act',pyOn);document.getElementById('pyBtn').textContent=pyOn?'✓ прошлый год':'＋ прошлый год';render();}
 
+/* Кнопка «реальные цифры» — только для Ozon и Консолида.
+   Создаётся рядом с «＋ прошлый год», разметку в index.html править не нужно. */
+function ensureOzBtn(){
+  const py=document.getElementById('pyBtn'); if(!py)return;
+  let b=document.getElementById('ozBtn');
+  const need=(curCo==='OZON'||curCo==='CONS');
+  if(!b&&need){
+    b=document.createElement('button');
+    b.id='ozBtn'; b.className=py.className;
+    b.title='Выкуп,руб = только деньги клиента (без баллов Ozon) · '
+      +'Ком.МП = Вознаграждение − Баллы (баллы площадка возвращает, как СПП у WB) · '
+      +'ДРЛ% и ДРР% — от реальной выручки';
+    b.textContent='＋ реальные цифры';
+    b.onclick=toggleOzReal;
+    py.parentNode.insertBefore(b,py.nextSibling);
+  }
+  if(b){ b.style.display=need?'':'none';
+         b.classList.toggle('act',need&&typeof ozReal!=='undefined'&&ozReal);
+         b.textContent=(need&&ozReal)?'✓ реальные цифры':'＋ реальные цифры'; }
+}
+
 function render(){
   if(!M.loaded)return;
+  ensureOzBtn();
   if(curTab!=='pl'){renderTab();return;}
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
@@ -107,6 +129,7 @@ function render(){
   document.getElementById('kpi').innerHTML=kpi.map(k=>`<div class="mc"><div class="ml">${k.l}</div><div class="mv ${k.c||''}">${k.v}</div>${k.d?`<div class="md">${k.d}</div>`:''}</div>`).join('');
   document.getElementById('matrixTtl').textContent = grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам';
   const msLbl=selMonths.size&&selMonths.size<12?' · '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'';
-  document.getElementById('matrixSub').textContent=`год ${y}${msLbl}${q?' · '+q:''}`;
+  const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof ozReal!=='undefined'&&ozReal)?' · реальные цифры (выручка без баллов, комиссия за вычетом баллов)':'';
+  document.getElementById('matrixSub').textContent=`год ${y}${msLbl}${q?' · '+q:''}${ozLbl}`;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
 }

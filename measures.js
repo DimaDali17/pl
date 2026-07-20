@@ -3,7 +3,7 @@ const DIV=(a,b)=>b?a/b:0;
 const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
 function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0,
     rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0,komOther:0,rekWB:0,rekMP:0,rekBlog:0,komp:0,ekvBill:0,
-    komNom:0,bonus:0,partner:0,taxBase:0};
+    komNom:0,bonus:0,partner:0,taxBase:0,cash:0};
   for(const r of M.obshiy){ if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
     a.zaks+=r.zaks;a.zaksRep+=(r.zaksRep||0);a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem;
     /* детализация комиссии (есть только у WB-финотчёта; у EF/Ozon — 0) */
@@ -11,7 +11,7 @@ function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,
     a.rekWB+=(r.rekWB||0);a.rekMP+=(r.rekMP||0);a.rekBlog+=(r.rekBlog||0);
     a.rozn+=(r.rozn||0);a.vv+=(r.vv||0);a.vvNds+=(r.vvNds||0);a.ekvair+=(r.ekvair||0);a.pvz+=(r.pvz||0);a.komOther+=(r.komOther||0);
     /* Ozon: номинальное вознаграждение, баллы, программы партнёров, база налога */
-    a.komNom+=(r.komNom||0);a.bonus+=(r.bonus||0);a.partner+=(r.partner||0);a.taxBase+=(r.taxBase||0); }
+    a.komNom+=(r.komNom||0);a.bonus+=(r.bonus||0);a.partner+=(r.partner||0);a.taxBase+=(r.taxBase||0);a.cash+=(r.cash||0); }
   return a; }
 function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
 function postRv(y,mArr,filt){ const a=agg(y,new Set(mArr),filt); if(a.post!==0)return a.post;
@@ -23,6 +23,18 @@ function ruleApplies(y,m){
   const completed=(y<nowY)||(y===nowY&&m<nowM);
   return fromApr&&completed;
 }
+/* ── Ozon: два представления ──
+   НОМИНАЛЬНОЕ (по умолчанию): Выкуп,руб = Выручка + Баллы + Партнёры (база, с которой
+     Ozon берёт вознаграждение), Ком.МП = вознаграждение ≈ 43%.
+   РЕАЛЬНОЕ (кнопка «реальные цифры»): Выкуп,руб = только деньги клиента,
+     Ком.МП = Вознаграждение − Баллы (баллы — это как СПП у WB, площадка их возвращает),
+     ДРЛ% и ДРР% считаются от реальной выручки. */
+let ozReal=false;
+function toggleOzReal(){ ozReal=!ozReal;
+  const b=document.getElementById('ozBtn');
+  if(b){ b.classList.toggle('act',ozReal); b.textContent=ozReal?'✓ реальные цифры':'＋ реальные цифры'; }
+  render(); }
+
 function meas(y,mArr,filt){
   const isAgg=(filt==null)||filt.agg===true;
   const mset=new Set(mArr); const a=agg(y,mset,filt); const acr=acrSum(y,mset,filt); const pR=postRv(y,mArr,filt);
@@ -33,17 +45,22 @@ function meas(y,mArr,filt){
       if(ruleApplies(y,m)&&r<30000){ r=300000; if(mArr.length===1)rekEst=true; }
       rek+=r; }
   }
+  /* Ozon в режиме «реальные цифры»: подменяем выручку и комиссию */
+  const ozR=(curCo==='OZON'||curCo==='CONS')&&ozReal&&a.komNom;
+  const vykr = ozR ? a.cash : a.vykr;
+  const kom  = ozR ? (a.komNom-a.bonus-a.partner) : a.kom;
   /* komp — компенсации WB (брак/утеря/подмена) и компенсации/декомпенсации Ozon:
      это ДОХОД, прибавляется */
-  const pribOper=a.vykr-a.kom-a.perem-a.dost-a.hran-a.nalog+a.komp;
+  const pribOper=vykr-kom-a.perem-a.dost-a.hran-a.nalog+a.komp;
   const postAkr=pR+acr;
-  const pribFact=a.vykr-a.kom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr+a.komp;
-  return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr:a.vykr,cena:DIV(a.vykr,a.vyks),
-    perem:a.perem,dost:a.dost,drl:DIV(a.dost,a.vykr),hran:a.hran,kom:a.kom,komP:DIV(a.kom,a.vykr),nalog:a.nalog,
-    pribOper,pribOperP:DIV(pribOper,a.vykr),postAkr,rek,rekEst,drr:DIV(rek,a.zakr),
-    pribFact,pribFactP:DIV(pribFact,a.vykr),
-    advCPO:DIV(rek,a.zaks),advCPS:DIV(rek,a.vyks),drrSa:DIV(rek,a.vykr),
-    logCPS:DIV(a.dost,a.vyks),stockCPS:DIV(a.hran,a.vyks),dostP:DIV(a.dost,a.vykr),hranP:DIV(a.hran,a.vykr),
+  const pribFact=vykr-kom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr+a.komp;
+  const drrBase = ozR ? vykr : a.zakr;   /* в реальном режиме ДРР считаем от реальной выручки */
+  return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr,cena:DIV(vykr,a.vyks),
+    perem:a.perem,dost:a.dost,drl:DIV(a.dost,vykr),hran:a.hran,kom,komP:DIV(kom,vykr),nalog:a.nalog,
+    pribOper,pribOperP:DIV(pribOper,vykr),postAkr,rek,rekEst,drr:DIV(rek,drrBase),
+    pribFact,pribFactP:DIV(pribFact,vykr),
+    advCPO:DIV(rek,a.zaks),advCPS:DIV(rek,a.vyks),drrSa:DIV(rek,vykr),
+    logCPS:DIV(a.dost,a.vyks),stockCPS:DIV(a.hran,a.vyks),dostP:DIV(a.dost,vykr),hranP:DIV(a.hran,vykr),
     srchek:DIV(a.zakr,a.zaks),acr,
     /* ── разложение выручки и комиссии (WB-финотчёт) ── */
     rozn:a.rozn, skidkaWB:a.rozn-a.vykr, skidkaWBp:DIV(a.rozn-a.vykr,a.rozn),
@@ -52,8 +69,9 @@ function meas(y,mArr,filt){
     vvP:DIV(a.vv,a.rozn), vvNdsP:DIV(a.vvNds,a.rozn), ekvairP:DIV(a.ekvair,a.rozn), pvzP:DIV(a.pvz,a.rozn),
     komRoznP:DIV(a.kom,a.rozn), hasFin:a.rozn>0,
     /* ── разложение Ozon: номинальная комиссия vs реальная ── */
-    komNom:a.komNom, bonus:a.bonus, partner:a.partner, taxBase:a.taxBase,
-    komNomP:DIV(a.komNom,a.rozn), bonusP:DIV(a.bonus,a.rozn),
+    komNom:a.komNom, bonus:a.bonus, partner:a.partner, taxBase:a.taxBase, cash:a.cash,
+    ozReal:!!ozR, komNomP:DIV(a.komNom,a.vykr), bonusP:DIV(a.bonus,a.vykr),
+    komRealP:DIV(a.komNom-a.bonus-a.partner,a.cash),
     /* «Удержания WB» из финотчёта — справочно рядом с рекламой из бухгалтерии (не складываются) */
     komp:a.komp, ekvBill:a.ekvBill, zaksRep:a.zaksRep,
     rekWB:a.rekWB, rekDiff:a.rekWB?(a.rek-a.rekWB):0,
@@ -81,12 +99,12 @@ const CO_TXT={
     vyks:{t:'Выкуплено штук = количество на строках «Выручка» из отчёта по начислениям Ozon.'},
     vkp:{t:'Выкупаемость = Выкуп,шт ÷ Заказ,шт. Заказы считаются по строкам логистики, поэтому доля приблизительная.'},
     zakr:{t:'Сумма заказов ≈ Заказ,шт × средняя цена выкупа (деньги клиента ÷ выкуп,шт).'},
-    vykr:{l:'Выкуп,руб',t:'ДЕНЬГИ КЛИЕНТА = «Выручка» + «Возврат выручки». Баллы за скидки сюда НЕ входят: их платит Ozon, а не покупатель. Прямой аналог «Вайлдберриз реализовал Товар (Пр)» — за счёт этого средний чек и все проценты сопоставимы с WB.'},
+    vykr:{l:'Выкуп,руб',t:'По умолчанию — Выручка + Баллы за скидки + Программы партнёров (база вознаграждения Ozon). Кнопка «реальные цифры» переключает на ДЕНЬГИ КЛИЕНТА = «Выручка» + «Возврат выручки». Баллы за скидки сюда НЕ входят: их платит Ozon, а не покупатель. Прямой аналог «Вайлдберриз реализовал Товар (Пр)» — за счёт этого средний чек и все проценты сопоставимы с WB.'},
     cena:{t:'Средний чек по живым деньгам = Выкуп,руб ÷ Выкуп,шт. Баллы Ozon в него не входят, поэтому он ниже «цены продавца».'},
     dost:{l:'Дставка',t:'Логистика и услуги Ozon: группы «Услуги доставки», «Услуги партнёров», «Услуги FBO», «Другие услуги и штрафы» (логистика, обратная логистика, эквайринг, ПВЗ, приёмка, звёздные товары и пр.). Классификация с фолбэком по группе — ни один тип начисления не теряется.'},
     drl:{t:'Доля логистики = Доставка ÷ Выкуп,руб. У Ozon выше, чем у WB: знаменатель — только живые деньги, без баллов.'},
     hran:{l:'Хранен',t:'У Ozon отдельной статьи хранения в начислениях нет — складские услуги входят в группу «Услуги FBO» и учтены в Доставке.'},
-    kom:{l:'Ком.Ozon',t:'РЕАЛЬНАЯ комиссия = «Вознаграждение за продажу» − «Баллы за скидки» − «Программы партнёров». Номинальные ~43% берутся с базы «выручка + баллы» и неинформативны: часть их Ozon возвращает баллами. Может быть отрицательной — как СПП у WB в 2022–2023. Помесячно скачет, потому что баллы приходят с лагом к вознаграждению; за год сходится.'},
+    kom:{l:'Ком.МП',t:'Комиссия маркетплейса. По умолчанию — НОМИНАЛЬНАЯ: вознаграждение Ozon (~43% от базы «Выручка + Баллы»). Кнопка «реальные цифры» переключает на РЕАЛЬНУЮ = «Вознаграждение за продажу» − «Баллы за скидки» − «Программы партнёров». Номинальные ~43% берутся с базы «выручка + баллы» и неинформативны: часть их Ozon возвращает баллами. Может быть отрицательной — как СПП у WB в 2022–2023. Помесячно скачет, потому что баллы приходят с лагом к вознаграждению; за год сходится.'},
     komP:{l:'Ком%',t:'Реальная комиссия Ozon ÷ Выкуп,руб (деньги клиента).'},
     nalog:{l:'Налог',t:'Налог УСН с базы «Выручка + Баллы за скидки + Программы партнёров» — для ФНС баллы это доход продавца. Важно: база ШИРЕ, чем Выкуп,руб. Ставка: 7% до 01.02.2026, далее 12%.'},
     pribOper:{t:'Операционная прибыль = Выкуп,руб − Ком.Ozon − Переменные − Доставка − Налог + Компенсации Ozon.'},
