@@ -29,6 +29,18 @@ function monthsAll(){ selMonths=new Set(); renderMonthChips(); render(); }
 
 let _t; function debouncedRender(){clearTimeout(_t);_t=setTimeout(render,250);}
 function setGrp(g){grpMode=g;document.querySelectorAll('#grp button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));render();}
+/* Кнопка среза «Всё время»: строки = год-месяц по всей истории, в одном листе */
+function ensureAllBtn(){
+  const box=document.getElementById('grp'); if(!box)return;
+  if(box.querySelector('[data-g="ym"]'))return;
+  const proto=box.querySelector('button'); if(!proto)return;
+  const b=document.createElement('button');
+  b.className=proto.className.replace(/\bon\b/,'').trim();
+  b.dataset.g='ym'; b.textContent='Всё время';
+  b.title='Все месяцы всех лет одним списком, без фильтра по году';
+  b.onclick=()=>setGrp('ym');
+  box.appendChild(b);
+}
 function togglePY(){pyOn=!pyOn;document.getElementById('pyBtn').classList.toggle('act',pyOn);document.getElementById('pyBtn').textContent=pyOn?'✓ прошлый год':'＋ прошлый год';render();}
 
 /* Кнопка «реальные цифры» — только для Ozon и Консолида.
@@ -40,21 +52,34 @@ function ensureOzBtn(){
   if(!b&&need){
     b=document.createElement('button');
     b.id='ozBtn'; b.className=py.className;
-    b.title='Выкуп,руб = только деньги клиента (без баллов Ozon) · '
-      +'Ком.МП = Вознаграждение − Баллы (баллы площадка возвращает, как СПП у WB) · '
-      +'ДРЛ% и ДРР% — от реальной выручки';
-    b.textContent='＋ реальные цифры';
-    b.onclick=toggleOzReal;
+    b.title='Приставляет справа второй набор колонок: выручка без баллов Ozon, '
+      +'комиссия = Вознаграждение − Баллы, ДРЛ% и ДРР% от неё же. Основные колонки не меняются.';
+    b.textContent='＋ без Баллов';
+    b.onclick=toggleNoBonus;
     py.parentNode.insertBefore(b,py.nextSibling);
   }
   if(b){ b.style.display=need?'':'none';
-         b.classList.toggle('act',need&&typeof ozReal!=='undefined'&&ozReal);
-         b.textContent=(need&&ozReal)?'✓ реальные цифры':'＋ реальные цифры'; }
+         b.classList.toggle('act',need&&typeof noBonus!=='undefined'&&noBonus);
+         b.textContent=(need&&noBonus)?'✓ без Баллов':'＋ без Баллов'; }
+}
+
+/* Колонки: основные + (по кнопке) набор «без Баллов» справа */
+function activeCols(){
+  const nb=(curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus;
+  return nb?COLS.concat(COLS_NB):COLS;
+}
+/* Универсальные подписи в навигации: «Комиссия ВБ» → «Комиссия», прочие ВБ → МП */
+function fixNavLabels(){
+  document.querySelectorAll('#tabs button, #tabs a, nav button, nav a').forEach(el=>{
+    const t=(el.textContent||'').trim();
+    if(/^Комиссия\s*(ВБ|WB)$/i.test(t)) el.textContent='Комиссия';
+    else if(/\bВБ\b/.test(t)) el.textContent=t.replace(/\bВБ\b/g,'МП');
+  });
 }
 
 function render(){
   if(!M.loaded)return;
-  ensureOzBtn();
+  ensureOzBtn(); ensureAllBtn(); fixNavLabels();
   if(curTab!=='pl'){renderTab();return;}
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
@@ -63,7 +88,14 @@ function render(){
 
   /* строки в зависимости от среза */
   let rows=[];
-  if(grpMode==='month'){
+  if(grpMode==='ym'){
+    /* Все месяцы всей истории. Фильтр по году и чипсы месяцев игнорируются. */
+    const seen=new Set();
+    for(const r of M.obshiy){ if(!searchOK(r))continue;
+      if(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem) seen.add(r.y+'-'+String(r.m).padStart(2,'0')); }
+    rows=[...seen].sort().map(k=>{ const yy=+k.slice(0,4), mm=+k.slice(5);
+      return {label:`${MONTHS[mm-1].slice(0,3)} ${yy}`,v:meas(yy,[mm],searchOK),py:null}; });
+  } else if(grpMode==='month'){
     rows=slicerMonths.map(m=>({label:MONTHS[m-1],v:meas(y,[m],searchOK),py:pyOn?meas(y-1,[m],searchOK):null}));
   } else {
     const dimOf = grpMode==='predmet'? (r=>predmetOf(r.paG)) : (r=>r.paG);
@@ -81,21 +113,24 @@ function render(){
   }
   /* Итог: незавершённые месяцы (текущий и будущие) в сумму НЕ входят. */
   const totMonths=slicerMonths.filter(m=>monthCompleted(y,m));
-  const tot={label:'Всего',v:meas(y,totMonths,searchOK),py:pyOn?meas(y-1,totMonths,searchOK):null};
+  const tot=(grpMode==='ym')
+    ? {label:'Всего за всё время',v:meas(0,[1,2,3,4,5,6,7,8,9,10,11,12],searchOK),py:null}
+    : {label:'Всего',v:meas(y,totMonths,searchOK),py:pyOn?meas(y-1,totMonths,searchOK):null};
 
   /* max для баров */
-  const mx={};COLS.filter(c=>c.bar).forEach(c=>mx[c.k]=Math.max(1,...rows.map(r=>Math.abs(r.v[c.k]))));
+  const CL=activeCols();
+  const mx={};CL.filter(c=>c.bar).forEach(c=>mx[c.k]=Math.max(1,...rows.map(r=>Math.abs(r.v[c.k]))));
 
   /* header */
-  const firstCol = grpMode==='month'?'Месяц':grpMode==='predmet'?'Предмет':'Артикул';
+  const firstCol = grpMode==='ym'?'Период':grpMode==='month'?'Месяц':grpMode==='predmet'?'Предмет':'Артикул';
   let h='<thead><tr><th>'+firstCol+'</th>';
-  COLS.forEach(c=>{ h+=`<th class="${c.hl?'hl':''}" title="${c.t||c.l}">${c.l}</th>`; if(pyOn)h+=`<th class="py" title="${c.l} за прошлый год">${c.l} ᴾʸ</th>`; });
+  CL.forEach(c=>{ h+=`<th class="${c.hl?'hl':''}" title="${c.t||c.l}">${c.l}</th>`; if(pyOn)h+=`<th class="py" title="${c.l} за прошлый год">${c.l} ᴾʸ</th>`; });
   h+='</tr></thead><tbody>';
 
   const cell=(c,v,isPY)=>{
     const val=v[c.k]; let inner=c.f(val);
     let cls=(c.hl?'hl ':'')+(isPY?'py ':'');
-    if(c.k==='pribFact'&&!isPY)cls+=val>0?'pos ':val<0?'neg ':'';
+    if((c.k==='pribFact'||c.k==='nbPribFact')&&!isPY)cls+=val>0?'pos ':val<0?'neg ':'';
     if(c.k==='rek'&&!isPY&&v.rekEst)cls+='est ';
     let bar='';
     if(c.bar&&!isPY){ const w=Math.abs(val)/mx[c.k]*100; const col=c.bar==='bl'?'bl':(val>=0?'g':'r'); bar=`<span class="bar ${col}" style="width:${w}%"></span>`; }
@@ -107,7 +142,7 @@ function render(){
     const empty=!isTot&&r.v.vyks===0&&r.v.zaks===0&&r.v.vykr===0;
     const incomplete=!isTot&&grpMode==='month'&&(()=>{const mi=MONTHS.indexOf(r.label)+1;return mi>0&&!monthCompleted(y2,mi);})();
     let s=`<tr class="${isTot?'total':''} ${empty?'empty':''} ${incomplete?'incomplete':''}"><td title="${r.label}${incomplete?' — месяц не завершён, в итог не входит':''}">${r.label}${incomplete?' <span class=\'inctag\'>идёт</span>':''}</td>`;
-    COLS.forEach(c=>{ s+=cell(c,r.v,false); if(pyOn)s+=cell(c,r.py,true); });
+    CL.forEach(c=>{ s+=cell(c,r.v,false); if(pyOn)s+=cell(c,r.py,true); });
     return s+'</tr>';
   };
   rows.forEach(r=>h+=rowHtml(r,false)); h+=rowHtml(tot,true); h+='</tbody>';
@@ -127,9 +162,10 @@ function render(){
     {l:'Выкуп %',v:fp(tot.v.vkp)}
   ];
   document.getElementById('kpi').innerHTML=kpi.map(k=>`<div class="mc"><div class="ml">${k.l}</div><div class="mv ${k.c||''}">${k.v}</div>${k.d?`<div class="md">${k.d}</div>`:''}</div>`).join('');
-  document.getElementById('matrixTtl').textContent = grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам';
+  document.getElementById('matrixTtl').textContent = grpMode==='ym'?'P&L за всё время (по месяцам)':grpMode==='month'?'P&L по месяцам':grpMode==='predmet'?'P&L по предметам':'P&L по артикулам';
   const msLbl=selMonths.size&&selMonths.size<12?' · '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'';
-  const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof ozReal!=='undefined'&&ozReal)?' · реальные цифры (выручка без баллов, комиссия за вычетом баллов)':'';
-  document.getElementById('matrixSub').textContent=`год ${y}${msLbl}${q?' · '+q:''}${ozLbl}`;
+  const ymLbl=(grpMode==='ym')?'вся история':'';
+  const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus)?' · + колонки без баллов':'';
+  document.getElementById('matrixSub').textContent=(ymLbl||`год ${y}${msLbl}`)+(q?' · '+q:'')+ozLbl;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
 }

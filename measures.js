@@ -23,17 +23,18 @@ function ruleApplies(y,m){
   const completed=(y<nowY)||(y===nowY&&m<nowM);
   return fromApr&&completed;
 }
-/* ── Ozon: два представления ──
-   НОМИНАЛЬНОЕ (по умолчанию): Выкуп,руб = Выручка + Баллы + Партнёры (база, с которой
-     Ozon берёт вознаграждение), Ком.МП = вознаграждение ≈ 43%.
-   РЕАЛЬНОЕ (кнопка «реальные цифры»): Выкуп,руб = только деньги клиента,
-     Ком.МП = Вознаграждение − Баллы (баллы — это как СПП у WB, площадка их возвращает),
-     ДРЛ% и ДРР% считаются от реальной выручки. */
-let ozReal=false;
-function toggleOzReal(){ ozReal=!ozReal;
+/* ── Ozon: «Выручка+Баллы» и «без Баллов» ──
+   ОСНОВНЫЕ колонки всегда считаются от базы Ozon: Выручка + Баллы + Партнёры
+     (именно с неё берётся вознаграждение ~43%). ДРЛ%/ДРР% — тоже от неё.
+   Кнопка «без Баллов» НЕ подменяет колонки, а ДОБАВЛЯЕТ второй набор:
+     выручка = только деньги клиента, комиссия = Вознаграждение − Баллы
+     (баллы площадка возвращает, это аналог СПП у WB), ДРЛ%/ДРР% — от неё же. */
+let noBonus=false;
+function toggleNoBonus(){ noBonus=!noBonus;
   const b=document.getElementById('ozBtn');
-  if(b){ b.classList.toggle('act',ozReal); b.textContent=ozReal?'✓ реальные цифры':'＋ реальные цифры'; }
+  if(b){ b.classList.toggle('act',noBonus); b.textContent=noBonus?'✓ без Баллов':'＋ без Баллов'; }
   render(); }
+const toggleOzReal=toggleNoBonus;   /* старое имя, на случай внешних вызовов */
 
 function meas(y,mArr,filt){
   const isAgg=(filt==null)||filt.agg===true;
@@ -45,16 +46,20 @@ function meas(y,mArr,filt){
       if(ruleApplies(y,m)&&r<30000){ r=300000; if(mArr.length===1)rekEst=true; }
       rek+=r; }
   }
-  /* Ozon в режиме «реальные цифры»: подменяем выручку и комиссию */
-  const ozR=(curCo==='OZON'||curCo==='CONS')&&ozReal&&a.komNom;
-  const vykr = ozR ? a.cash : a.vykr;
-  const kom  = ozR ? (a.komNom-a.bonus-a.partner) : a.kom;
+  const vykr=a.vykr, kom=a.kom;
   /* komp — компенсации WB (брак/утеря/подмена) и компенсации/декомпенсации Ozon:
      это ДОХОД, прибавляется */
   const pribOper=vykr-kom-a.perem-a.dost-a.hran-a.nalog+a.komp;
   const postAkr=pR+acr;
   const pribFact=vykr-kom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr+a.komp;
-  const drrBase = ozR ? vykr : a.zakr;   /* в реальном режиме ДРР считаем от реальной выручки */
+  /* ДРР: у маркетплейсов с баллами знаменатель — выручка (Выручка+Баллы), а не Заказ,руб */
+  const isOZ=(curCo==='OZON')||(curCo==='CONS'&&a.komNom!==0);
+  const drrBase = isOZ ? vykr : a.zakr;
+  /* второй набор «без Баллов» */
+  const nbVykr=a.cash;
+  const nbKom=a.komNom-a.bonus-a.partner;
+  const nbPribOper=nbVykr-nbKom-a.perem-a.dost-a.hran-a.nalog+a.komp;
+  const nbPribFact=nbVykr-nbKom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr+a.komp;
   return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr,cena:DIV(vykr,a.vyks),
     perem:a.perem,dost:a.dost,drl:DIV(a.dost,vykr),hran:a.hran,kom,komP:DIV(kom,vykr),nalog:a.nalog,
     pribOper,pribOperP:DIV(pribOper,vykr),postAkr,rek,rekEst,drr:DIV(rek,drrBase),
@@ -69,9 +74,13 @@ function meas(y,mArr,filt){
     vvP:DIV(a.vv,a.rozn), vvNdsP:DIV(a.vvNds,a.rozn), ekvairP:DIV(a.ekvair,a.rozn), pvzP:DIV(a.pvz,a.rozn),
     komRoznP:DIV(a.kom,a.rozn), hasFin:a.rozn>0,
     /* ── разложение Ozon: номинальная комиссия vs реальная ── */
-    komNom:a.komNom, bonus:a.bonus, partner:a.partner, taxBase:a.taxBase, cash:a.cash,
-    ozReal:!!ozR, komNomP:DIV(a.komNom,a.vykr), bonusP:DIV(a.bonus,a.vykr),
-    komRealP:DIV(a.komNom-a.bonus-a.partner,a.cash),
+    komNom:a.komNom, bonus:a.bonus, partner:a.partner, taxBase:a.taxBase,
+    /* ── набор «без Баллов» ── */
+    nbVykr, nbKom, nbKomP:DIV(nbKom,nbVykr), nbCena:DIV(nbVykr,a.vyks),
+    nbDrl:DIV(a.dost,nbVykr), nbDrr:DIV(rek,nbVykr),
+    nbPribOper, nbPribOperP:DIV(nbPribOper,nbVykr),
+    nbPribFact, nbPribFactP:DIV(nbPribFact,nbVykr),
+    bonusP:DIV(a.bonus,a.vykr), isOZ,
     /* «Удержания WB» из финотчёта — справочно рядом с рекламой из бухгалтерии (не складываются) */
     komp:a.komp, ekvBill:a.ekvBill, zaksRep:a.zaksRep,
     rekWB:a.rekWB, rekDiff:a.rekWB?(a.rek-a.rekWB):0,
@@ -110,7 +119,7 @@ const CO_TXT={
     pribOper:{t:'Операционная прибыль = Выкуп,руб − Ком.Ozon − Переменные − Доставка − Налог + Компенсации Ozon.'},
     postAkr:{l:'Пост+акр',t:'Постоянные расходы и акруалс ведутся только по EF — у Ozon пусто.'},
     rek:{l:'Реклама',t:'Реклама Ozon из начислений: группа «Продвижение и реклама» (Оплата за клик, Трафареты, Вывод в топ, Продвижение с оплатой за заказ).'},
-    drr:{t:'Доля рекламы = Реклама ÷ Заказ,руб.'},
+    drr:{t:'Доля рекламы = Реклама ÷ Выкуп,руб (у Ozon знаменатель — выручка с баллами, а не Заказ,руб).'},
     pribFact:{t:'Чистая прибыль = Выкуп,руб − Ком.Ozon − Переменные − Доставка − Налог − Реклама + Компенсации.'}
   },
   EZFR:{
@@ -151,4 +160,16 @@ const COLS=[
   COL('drr','ДРР%',fp1,'Доля рекламы = Реклама ÷ Заказ,руб.'),
   COL('pribFact','Пр.Факт(асс)',fi,'Чистая прибыль = Пр.Опер − Пост+акр − Реклама. Полностью: Выкуп,руб − Ком.МП − Переменные − Доставка − Хранение − Налог − Пост.Р − Акруалс − Реклама + Компенсации.',{bar:'pf'}),
   COL('pribFactP','Ф%',fp,'Чистая прибыль ÷ Выкуп,руб.',{hl:1})
+];
+
+/* Дополнительные колонки, которые ПРИСТАВЛЯЮТСЯ справа по кнопке «без Баллов» */
+const COLS_NB=[
+  COL('nbVykr','Выкуп,руб ᴮᴮ',fi,'Без баллов: только деньги, которые заплатил покупатель («Выручка» + «Возврат выручки»). Баллы за скидки исключены — их платит площадка.'),
+  COL('nbCena','Ср.Чек ᴮᴮ',fi,'Средний чек по живым деньгам = Выкуп,руб ᴮᴮ ÷ Выкуп,шт.'),
+  COL('nbKom','Ком.МП ᴮᴮ',fi,'Реальная комиссия = Вознаграждение − Баллы за скидки − Программы партнёров. Баллы площадка возвращает продавцу, поэтому фактическая нагрузка сильно ниже номинальных ~43%.'),
+  COL('nbKomP','Ком% ᴮᴮ',fp1,'Реальная комиссия ÷ Выкуп,руб ᴮᴮ.'),
+  COL('nbDrl','ДРЛ% ᴮᴮ',fp,'Доставка ÷ Выкуп,руб ᴮᴮ.'),
+  COL('nbDrr','ДРР% ᴮᴮ',fp1,'Реклама ÷ Выкуп,руб ᴮᴮ.'),
+  COL('nbPribFact','Пр.Факт ᴮᴮ',fi,'Чистая прибыль на реальной выручке = Выкуп,руб ᴮᴮ − Ком.МП ᴮᴮ − Переменные − Доставка − Хранение − Налог − Пост.Р − Акруалс − Реклама + Компенсации.'),
+  COL('nbPribFactP','Ф% ᴮᴮ',fp,'Чистая прибыль ᴮᴮ ÷ Выкуп,руб ᴮᴮ.',{hl:1})
 ];

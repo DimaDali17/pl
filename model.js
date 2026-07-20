@@ -498,6 +498,28 @@ async function buildModel(textsOverride){
              +holes.map(k=>`${k} (${repM[k].toLocaleString('ru-RU')} шт)`).join(' · ')
              +` · за эти месяцы будут заказы, но нулевая выручка — нужны недельные файлы в бэкап`
            :'финотчёт покрывает все месяцы, где report видит выкупы'});}
+    /* ── Выкупы за месяцы, где финотчёта нет вовсе ──
+       Бэкап финотчёта начинается не с начала истории (июль–август 2021 отсутствуют).
+       За такие месяцы берём выкупы и выручку из report. ВАЖНО: выручка report — это
+       «К перечислению» (НЕТТО, после комиссии), а не gross. Помечаем vykrEst=1,
+       чтобы такие месяцы было видно и они не выдавались за полноценные. */
+    {const finM={};
+     obEF.forEach(r=>{ if(r.vyks)finM[r.y+'|'+r.m]=1; });
+     const add={};
+     salesEF.forEach(r=>{ if(!r.date||!r.vyks)return;
+       const k=r.date.getFullYear()+'|'+(r.date.getMonth()+1);
+       if(finM[k])return;
+       const kk=k+'|'+r.paG;
+       const o=add[kk]||(add[kk]={y:r.date.getFullYear(),m:r.date.getMonth()+1,paG:r.paG,v:0,r:0});
+       o.v+=r.vyks; o.r+=r.vykr; });
+     let n=0,q=0,sum=0;
+     Object.values(add).forEach(o=>{ n++; q+=o.v; sum+=o.r;
+       obEF.push({paG:o.paG,y:o.y,m:o.m,zaks:0,vyks:o.v,zakr:0,vykr:Math.round(o.r),vykrEst:1,
+         kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}); });
+     diag.push({name:'Выкупы: добор из report',status:q?'warn':'ok',rows:n,
+       msg:q?`за месяцы без финотчёта добрано ${q.toLocaleString('ru-RU')} шт на ${Math.round(sum).toLocaleString('ru-RU')} ₽`
+             +` · ⚠ выручка НЕТТО (после комиссии), а не gross — эти месяцы неполноценны`
+           :'финотчёт покрывает все месяцы с выкупами'});}
     /* Заказы: финотчёт → report → доставки (см. fixOrders) */
     fixOrders(obEF,salesEF,'EF');
     /* ── Хранение: добор из листа «Лог+Хран» ──
