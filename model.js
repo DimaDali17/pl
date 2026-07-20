@@ -527,6 +527,34 @@ async function buildModel(textsOverride){
        msg:q?`за месяцы без финотчёта добрано ${q.toLocaleString('ru-RU')} шт на ${Math.round(sum).toLocaleString('ru-RU')} ₽`
              +` · ⚠ выручка НЕТТО (после комиссии), а не gross — эти месяцы неполноценны`
            :'финотчёт покрывает все месяцы с выкупами'});}
+    /* ── Поартикульная сверка выкупов: финотчёт vs report ──
+       Ловит природу устойчивой недостачи ~5%: размазана она по всем артикулам
+       (значит источники считают выкуп по-разному) или сидит в нескольких
+       (значит ключ/маппинг). Берём последний ПОЛНЫЙ год. */
+    {const ys=[...new Set(obEF.filter(r=>r.vyks).map(r=>r.y))].sort();
+     const yChk=ys.length>1?ys[ys.length-2]:ys[ys.length-1];
+     if(yChk){
+       const F={},R={};
+       obEF.forEach(r=>{ if(r.y===yChk&&r.vyks)F[r.paG]=(F[r.paG]||0)+r.vyks; });
+       salesEF.forEach(r=>{ if(r.date&&r.date.getFullYear()===yChk&&r.vyks)R[r.paG]=(R[r.paG]||0)+r.vyks; });
+       const keys=[...new Set(Object.keys(F).concat(Object.keys(R)))];
+       let less=0,more=0,same=0,sumF=0,sumR=0;
+       const d=[];
+       keys.forEach(k=>{ const f=F[k]||0,rr=R[k]||0; sumF+=f; sumR+=rr;
+         if(f<rr)less++; else if(f>rr)more++; else same++;
+         if(rr)d.push([k,f-rr,rr?(f/rr):0,rr]); });
+       d.sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+       const med=(()=>{const v=d.filter(x=>x[3]>50).map(x=>x[2]).sort((a,b)=>a-b);
+         return v.length?v[Math.floor(v.length/2)]:0;})();
+       diag.push({name:`Сверка выкупов ${yChk}: финотчёт vs report`,status:'ok',rows:keys.length,
+         msg:`финотчёт ${sumF.toLocaleString('ru-RU')} vs report ${sumR.toLocaleString('ru-RU')} шт`
+           +` · артикулов: меньше ${less} · больше ${more} · ровно ${same}`
+           +` · медианное отношение (по артикулам >50 шт): ${(med*100).toFixed(1)}%`
+           +` · крупнейшие расхождения: `
+           +d.slice(0,8).map(([k,dd,rt])=>`«${k}» ${dd>0?'+':''}${dd.toLocaleString('ru-RU')} (${(rt*100).toFixed(0)}%)`).join(' · ')
+           +` ║ если медиана ≈95% и «меньше» почти у всех — источники считают выкуп по-разному;`
+           +` если расхождение сидит в единицах артикулов — проблема в ключе`});
+     }}
     /* Заказы: финотчёт → report → доставки (см. fixOrders) */
     fixOrders(obEF,salesEF,'EF');
     /* ── Хранение: добор из листа «Лог+Хран» ──
