@@ -45,6 +45,19 @@ function togglePY(){pyOn=!pyOn;document.getElementById('pyBtn').classList.toggle
 
 /* Кнопка «реальные цифры» — только для Ozon и Консолида.
    Создаётся рядом с «＋ прошлый год», разметку в index.html править не нужно. */
+/* Светло-золотая прозрачная заливка для колонок «без Баллов» */
+function ensureNbStyle(){
+  if(document.getElementById('nbStyle'))return;
+  const st=document.createElement('style'); st.id='nbStyle';
+  st.textContent=`
+    #matrix th.nb, #matrix td.nb{ background:rgba(212,175,55,.13); }
+    #matrix tr:hover td.nb{ background:rgba(212,175,55,.20); }
+    #matrix tr.total td.nb{ background:rgba(212,175,55,.24); }
+    #matrix th.nb{ background:rgba(212,175,55,.20); }
+    #matrix th.nb.hl, #matrix td.nb.hl{ background:rgba(212,175,55,.26); }`;
+  document.head.appendChild(st);
+}
+
 function ensureOzBtn(){
   const py=document.getElementById('pyBtn'); if(!py)return;
   let b=document.getElementById('ozBtn');
@@ -85,7 +98,7 @@ function fixNavLabels(){
 
 function render(){
   if(!M.loaded)return;
-  ensureOzBtn(); ensureAllBtn(); fixNavLabels();
+  ensureNbStyle(); ensureOzBtn(); ensureAllBtn(); fixNavLabels();
   if(curTab!=='pl'){renderTab();return;}
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
@@ -130,12 +143,12 @@ function render(){
   /* header */
   const firstCol = grpMode==='ym'?'Период':grpMode==='month'?'Месяц':grpMode==='predmet'?'Предмет':'Артикул';
   let h='<thead><tr><th>'+firstCol+'</th>';
-  CL.forEach(c=>{ h+=`<th class="${c.hl?'hl':''}" title="${c.t||c.l}">${c.l}</th>`; if(pyOn)h+=`<th class="py" title="${c.l} за прошлый год">${c.l} ᴾʸ</th>`; });
+  CL.forEach(c=>{ h+=`<th class="${(c.hl?'hl ':'')+(c.nb?'nb':'')}" title="${c.t||c.l}">${c.l}</th>`; if(pyOn)h+=`<th class="py${c.nb?' nb':''}" title="${c.l} за прошлый год">${c.l} ᴾʸ</th>`; });
   h+='</tr></thead><tbody>';
 
   const cell=(c,v,isPY)=>{
     const val=v[c.k]; let inner=c.f(val);
-    let cls=(c.hl?'hl ':'')+(isPY?'py ':'');
+    let cls=(c.hl?'hl ':'')+(isPY?'py ':'')+(c.nb?'nb ':'');
     if((c.k==='pribFact'||c.k==='nbPribFact')&&!isPY)cls+=val>0?'pos ':val<0?'neg ':'';
     if(c.k==='rek'&&!isPY&&v.rekEst)cls+='est ';
     let bar='';
