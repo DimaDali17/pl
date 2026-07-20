@@ -514,8 +514,15 @@ async function buildModel(textsOverride){
        o.v+=r.vyks; o.r+=r.vykr; });
      let n=0,q=0,sum=0;
      Object.values(add).forEach(o=>{ n++; q+=o.v; sum+=o.r;
+       /* себестоимость — по тем же справочникам, что и в основном контуре */
+       let pu=puLE[lnk(o.paG)]; if(pu===undefined)pu=puAE[nk(o.paG)];
+       if(pu===undefined){ const g=glubKey(o.paG); if(g&&puLE._puG[g]!==undefined)pu=puLE._puG[g]; }
+       if(pu===undefined){ const a=M.artByPaG[o.paG];
+         pu=(a&&fbEF.predAvg[a.predmet])||fbEF.globalAvg; }
+       /* выручка из report — это «К перечислению» (нетто), то есть готовая база налога */
+       const nal=Math.round(o.r*TAX_EF(o.y,o.m));
        obEF.push({paG:o.paG,y:o.y,m:o.m,zaks:0,vyks:o.v,zakr:0,vykr:Math.round(o.r),vykrEst:1,
-         kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0}); });
+         kom:0,rek:0,post:0,nalog:nal,hran:0,dost:0,perem:Math.round((pu||0)*o.v)}); });
      diag.push({name:'Выкупы: добор из report',status:q?'warn':'ok',rows:n,
        msg:q?`за месяцы без финотчёта добрано ${q.toLocaleString('ru-RU')} шт на ${Math.round(sum).toLocaleString('ru-RU')} ₽`
              +` · ⚠ выручка НЕТТО (после комиссии), а не gross — эти месяцы неполноценны`
@@ -529,17 +536,21 @@ async function buildModel(textsOverride){
        чтобы не задвоить 2025–2026. Доставку не трогаем: её финотчёт даёт всегда. */
     {
       const logG=parseLog(raw.log);
-      const finH={}; obEF.forEach(r=>{ if(r.hran) finH[r.y+'|'+r.m]=1; });
-      let addH=0,addM={};
+      const finH={},finD={};
+      obEF.forEach(r=>{ if(r.hran) finH[r.y+'|'+r.m]=1; if(r.dost) finD[r.y+'|'+r.m]=1; });
+      let addH=0,addM={},addD=0;
       logG.forEach(r=>{
-        const y=r.date.getFullYear(),m=r.date.getMonth()+1;
-        if(finH[y+'|'+m]||!r.hran)return;
-        addH+=r.hran; addM[y]=(addM[y]||0)+r.hran;
+        const y=r.date.getFullYear(),m=r.date.getMonth()+1,k=y+'|'+m;
+        const h=finH[k]?0:r.hran;          /* хранение — если финотчёт его не дал */
+        const d=finD[k]?0:r.dost;          /* доставка — если финотчёта за месяц нет вовсе */
+        if(!h&&!d)return;
+        addH+=h; addD+=d; if(h)addM[y]=(addM[y]||0)+h;
         obEF.push({paG:r.paG,y,m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,
-          rek:0,post:0,nalog:0,hran:r.hran,dost:0,perem:0});
+          rek:0,post:0,nalog:0,hran:h,dost:d,perem:0});
       });
       diag.push({name:'Хранение: добор из «Лог+Хран»',status:addH?'warn':'ok',rows:logG.length,
-        msg:(addH?`добрано ${Math.round(addH).toLocaleString('ru-RU')} ₽ за месяцы без хранения в финотчёте`
+        msg:(addD?`доставка добрана ${Math.round(addD).toLocaleString('ru-RU')} ₽ за месяцы без финотчёта · `:'')
+          +(addH?`хранение ${Math.round(addH).toLocaleString('ru-RU')} ₽ за месяцы без хранения в финотчёте`
                  :'добирать нечего — финотчёт закрывает все месяцы')
           +(Object.keys(addM).length?` · по годам: ${Object.keys(addM).sort().map(y=>y+':'+Math.round(addM[y]).toLocaleString('ru-RU')).join(' · ')}`:'')});
     }
