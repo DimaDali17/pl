@@ -50,25 +50,44 @@ function tabTables(el,chart,title,sub,cols,y,q,months){
     +section(`${title} по артикулам · ${y}${per}`,'артикулы <100 заказов → «Прочее»',breakdownTable(cols,y,q,'artikul',months));
 }
 const kf=v=>!v?'':(Math.abs(v)>=1000?Math.round(v/1000)+'к':Math.round(v));
-/* пропорциональный график: столбцы (левая шкала) + линия (правая шкала), подписи над столбцами и точками */
+/* «красивый» потолок шкалы: наименьшее из {1,2,2.5,5,10}·10^k, что ≥ x — чтобы цена деления была ровной */
+function niceCeil(x){ x=Math.abs(x); if(!isFinite(x)||x<=0)return 1;
+  const p=Math.pow(10,Math.floor(Math.log10(x))), f=x/p;
+  const nf=f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10; return nf*p; }
+/* пропорциональный график: столбцы (левая шкала) + линия (правая шкала).
+   Оси подписаны, шкалы размечены (5 делений с ценой деления), метки значений — каждая 5-я + последняя.
+   o.leftTitle / o.rightTitle — подписи осей; o.barFmt / o.lineFmt — формат столбцов / линии. */
 function chartBL(labels,bars,line,o){
-  o=o||{}; const W=920,H=225,pL=6,pR=6,pT=26,pB=22,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
-  const maxB=Math.max(1,...bars.map(v=>Math.abs(v)||0));
-  const lv=line.filter(v=>isFinite(v)&&v>0); const maxL=Math.max(1,...lv);
+  o=o||{}; const W=920,H=250,pL=54,pR=54,pT=24,pB=40,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
+  const maxB=niceCeil(Math.max(1,...bars.map(v=>Math.abs(v)||0)));
+  const lv=line.filter(v=>isFinite(v)&&v>0); const hasLine=lv.length>0; const maxL=niceCeil(Math.max(1,...lv));
   const bx=i=>pL+bw*i+bw*0.28,bwid=bw*0.44,by=v=>pT+ih-(Math.max(0,v)/maxB*ih);
   const lx=i=>pL+bw*i+bw*0.5,ly=v=>pT+ih-(v/maxL*ih);
-  const bc=o.barColor||'var(--blue)',lc=o.lineColor||'var(--amber)',lf=o.lineFmt||(v=>Math.round(v)),bf=o.barFmt;
+  const bc=o.barColor||'var(--blue)',lc=o.lineColor||'var(--amber)',lf=o.lineFmt||(v=>Math.round(v)),bf=o.barFmt||kf;
+  const lt=o.leftTitle||'',rt=o.rightTitle||'';
+  /* последняя реальная точка (не хвостовые нули) — её метку показываем всегда */
+  let lastB=-1; bars.forEach((v,i)=>{ if(Math.abs(v))lastB=i; });
+  let lastL=-1; line.forEach((v,i)=>{ if(isFinite(v)&&v>0)lastL=i; });
+  const showB=i=>n<=14||i%5===0||i===lastB, showL=i=>n<=14||i%5===0||i===lastL;
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
-  for(let g=1;g<=3;g++){const yy=(pT+ih-ih*g/4).toFixed(1);s+=`<line x1="${pL}" y1="${yy}" x2="${W-pR}" y2="${yy}" stroke="var(--border)" stroke-width="1"/>`;}
+  /* сетка + числовые шкалы: слева — столбцы, справа — линия */
+  for(let g=0;g<=4;g++){ const yy=pT+ih-ih*g/4;
+    s+=`<line x1="${pL}" y1="${yy.toFixed(1)}" x2="${W-pR}" y2="${yy.toFixed(1)}" stroke="var(--border)" stroke-width="1"${g?' opacity="0.55"':''}/>`;
+    s+=`<text x="${pL-7}" y="${(yy+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink3)">${g?bf(maxB*g/4):'0'}</text>`;
+    if(hasLine)s+=`<text x="${W-pR+7}" y="${(yy+3).toFixed(1)}" text-anchor="start" font-size="9" fill="${lc}">${g?lf(maxL*g/4):'0'}</text>`;
+  }
+  /* подписи осей */
+  if(lt)s+=`<text transform="rotate(-90 13 ${(pT+ih/2).toFixed(1)})" x="13" y="${(pT+ih/2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--ink3)">${lt}</text>`;
+  if(rt&&hasLine)s+=`<text transform="rotate(90 ${W-13} ${(pT+ih/2).toFixed(1)})" x="${W-13}" y="${(pT+ih/2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="${lc}">${rt}</text>`;
   bars.forEach((v,i)=>{const h=Math.max(0,v)/maxB*ih;s+=`<rect x="${bx(i).toFixed(1)}" y="${by(v).toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${bc}" opacity="0.5"/>`;
-    if(bf&&v&&n<=14)s+=`<text x="${lx(i).toFixed(1)}" y="${(by(v)-4).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--ink3)" font-weight="700">${bf(v)}</text>`;});
+    if(v&&showB(i))s+=`<text x="${lx(i).toFixed(1)}" y="${(by(v)-4).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--ink3)" font-weight="700">${bf(v)}</text>`;});
   const seg=[];line.forEach((v,i)=>{if(isFinite(v)&&v>0)seg.push(`${lx(i).toFixed(1)},${ly(v).toFixed(1)}`);});
   if(seg.length>1)s+=`<polyline points="${seg.join(' ')}" fill="none" stroke="${lc}" stroke-width="2.5"/>`;
   line.forEach((v,i)=>{if(isFinite(v)&&v>0){s+=`<circle cx="${lx(i).toFixed(1)}" cy="${ly(v).toFixed(1)}" r="3" fill="${lc}"/>`;
-    if(n<=14)s+=`<text x="${lx(i).toFixed(1)}" y="${(ly(v)-7).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink2)" font-weight="700">${lf(v)}</text>`;}});
+    if(showL(i))s+=`<text x="${lx(i).toFixed(1)}" y="${(ly(v)-7).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink2)" font-weight="700">${lf(v)}</text>`;}});
   labels.forEach((L,i)=>{ if(L==='')return;
     const fs=n>28?8:9.5;
-    s+=`<text x="${lx(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="${fs}" fill="var(--ink3)">${L}</text>`;});
+    s+=`<text x="${lx(i).toFixed(1)}" y="${(pT+ih+15).toFixed(1)}" text-anchor="middle" font-size="${fs}" fill="var(--ink3)">${L}</text>`;});
   return s+'</svg>';
 }
 function chartCard(title,legend,svg){return `<div class="chartbox" style="margin-bottom:14px"><div class="chartttl">${title}</div><div class="leg" style="display:flex;align-items:center;gap:10px">${legend}${scopeToggle()}</div><div class="svgbox">${svg}</div></div>`;}
@@ -127,7 +146,7 @@ function renderTab(){
     const rekM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).rek), drrM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).drr);
     const chart=chartCard(`Реклама и ДРР ${scopeTtl(y)}`,
       legItem('var(--amber)','Реклама, ₽',.7)+legItem('var(--blue)','ДРР.Or%'),
-      chartBL(scopeAxis(),rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf}));
+      chartBL(scopeAxis(),rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf,leftTitle:'₽',rightTitle:'ДРР %'}));
     const cols=[
       {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
       {l:'Выкуп,руб',t:'Выручка (gross) из финотчёта маркетплейса — что заплатил покупатель. У Ozon — Выручка + Баллы за скидки',fn:(m,f)=>fi(meas(y,m,f).vykr)},
@@ -146,7 +165,7 @@ function renderTab(){
     const dostM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).dost), cpsM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).logCPS);
     const chart=chartCard(`Доставка и Log.CPS ${scopeTtl(y)}`,
       legItem('var(--blue)','Доставка, ₽',.6)+legItem('var(--amber)','Log.CPS (на выкуп)'),
-      chartBL(scopeAxis(),dostM,cpsM,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf}));
+      chartBL(scopeAxis(),dostM,cpsM,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf,leftTitle:'₽',rightTitle:'₽/выкуп'}));
     const cols=base.concat([
       {l:'Доставка',t:'Логистика маркетплейса из финотчёта (доставка, приёмка, возмещение издержек)',fn:(m,f)=>fi(meas(y,m,f).dost)},
       {l:'Хранение',t:'Хранение. У WB — из финотчёта; за 2021–2024 добирается из листа «Лог+Хран». У Ozon отдельной статьи нет — входит в Доставку',fn:(m,f)=>fi(meas(y,m,f).hran)},
@@ -161,7 +180,7 @@ function renderTab(){
     const postSum=(mArr)=>{const ms=new Set(mArr);return M.postR.filter(r=>r.y===y&&ms.has(r.m)).reduce((s,r)=>s+r.summa,0);};
     const postM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).postAkr);
     const chart=chartCard(`Пост.Р(+акр) ${scopeTtl(y)}`,legItem('#5B3FA0','Пост.Р(+акр), ₽',.6),
-      chartBL(scopeAxis(),postM,postM.map(_=>NaN),{barColor:'#5B3FA0',barFmt:kf}));
+      chartBL(scopeAxis(),postM,postM.map(_=>NaN),{barColor:'#5B3FA0',barFmt:kf,leftTitle:'₽'}));
     const cols=base.concat([
       {l:'Постоянные',t:'Постоянные расходы (лист расход, «Пост расходы») с откатом на пр. месяц если 0',fn:(m,f)=>fi(meas(y,m,f).postAkr-meas(y,m,f).acr)},
       {l:'Акруалс',t:'Акруалс (отдельный лист Acruals)',fn:(m,f)=>fi(meas(y,m,f).acr)},
@@ -174,7 +193,7 @@ function renderTab(){
     const line=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).srchek);
     const chart=chartCard(`Заказ,шт и Ср.Чек ${scopeTtl(y)}`,
       legItem('var(--blue)','Заказ,шт',.5)+legItem('var(--amber)','Ср.Чек Заказа'),
-      chartBL(scopeAxis(),bars,line,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf}));
+      chartBL(scopeAxis(),bars,line,{barColor:'var(--blue)',lineColor:'var(--amber)',lineFmt:v=>Math.round(v),barFmt:kf,leftTitle:'шт',rightTitle:'₽'}));
     const cols=[
       {l:'Заказ,шт',t:'Заказано штук',fn:(m,f)=>fi(meas(y,m,f).zaks)},
       {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
@@ -246,14 +265,19 @@ function renderProfit(el,y,q){
 }
 /* сгруппированные столбцы: две серии рядом в слоте, с нулевой осью и подписями */
 function chartGrouped(labels,s1,s2,fmt){
-  const W=760,H=190,pL=8,pR=8,pT=22,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
+  const W=760,H=205,pL=46,pR=10,pT=22,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
   const vals=s1.concat(s2).map(v=>v||0);
-  const maxV=Math.max(0,...vals),minV=Math.min(0,...vals),range=(maxV-minV)||1;
-  const zy=pT+ih*(maxV/range);
-  const hOf=v=>Math.abs(v)/range*ih;
+  const top=niceCeil(Math.max(0,...vals)||1), rawMin=Math.min(0,...vals), bot=rawMin<0?-niceCeil(-rawMin):0;
+  const range=(top-bot)||1;
+  const yOf=v=>pT+ih*((top-v)/range), zy=yOf(0), hOf=v=>Math.abs(v)/range*ih;
   const bwid=bw*0.30,gap=bw*0.08;
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
-  s+=`<line x1="${pL}" y1="${zy.toFixed(1)}" x2="${W-pR}" y2="${zy.toFixed(1)}" stroke="var(--border2)" stroke-width="1"/>`;
+  /* сетка + шкала слева (млн ₽), ноль выделен */
+  for(let g=0;g<=4;g++){ const val=top-range*g/4, yy=yOf(val);
+    s+=`<line x1="${pL}" y1="${yy.toFixed(1)}" x2="${W-pR}" y2="${yy.toFixed(1)}" stroke="var(--border)" stroke-width="1" opacity="0.5"/>`;
+    s+=`<text x="${pL-6}" y="${(yy+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink3)">${fmt(val)||'0'}</text>`; }
+  s+=`<text transform="rotate(-90 12 ${(pT+ih/2).toFixed(1)})" x="12" y="${(pT+ih/2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--ink3)">млн ₽</text>`;
+  s+=`<line x1="${pL}" y1="${zy.toFixed(1)}" x2="${W-pR}" y2="${zy.toFixed(1)}" stroke="var(--border2)" stroke-width="1.4"/>`;
   labels.forEach((L,i)=>{ const cx=pL+bw*i+bw/2;
     [[s1[i],'var(--green)','var(--red)',-1],[s2[i],'#B7D9C4','#E3AFAF',1]].forEach(([v,colPos,colNeg,side])=>{
       const val=v||0,h=hOf(val),x=side<0?cx-bwid-gap/2:cx+gap/2,yy=val>=0?zy-h:zy,col=val<0?colNeg:colPos;

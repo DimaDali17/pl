@@ -119,7 +119,7 @@ function renderKomWB(el,y,q,sM){
   const pctM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).komRoznP);
   const chart=chartCard(`Комиссия МП и её доля от розничной · ${scopeTtl(y)}`,
     legItem('var(--red)','Комиссия, ₽',.55)+legItem('var(--blue)','Ком% от розничной'),
-    chartBL(scopeAxis(),komM,pctM,{barColor:'var(--red)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf}));
+    chartBL(scopeAxis(),komM,pctM,{barColor:'var(--red)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf,leftTitle:'₽',rightTitle:'Ком %'}));
   const sub=`структура: вознаграждение ${fp1(K.vvP)} · НДС ${fp1(K.vvNdsP)} · эквайринг ${fp1(K.ekvairP)} · ПВЗ ${fp1(K.pvzP)} — от розничной`
     +(Math.abs(K.komOther)>1?` · ⚠ не разложено: ${fi(K.komOther)} ₽`:'');
   tabTables(el,chart,'Комиссия',sub,rzCols(y),y,q,sM);
