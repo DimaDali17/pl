@@ -4,8 +4,19 @@ const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
 function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0,
     rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0,komOther:0,rekWB:0,rekMP:0,rekBlog:0,komp:0,ekvBill:0,
     komNom:0,bonus:0,partner:0,taxBase:0,cash:0};
-  for(const r of M.obshiy){ if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue;
-    a.zaks+=r.zaks;a.zaksRep+=(r.zaksRep||0);a.vyks+=r.vyks;a.zakr+=r.zakr;a.vykr+=r.vykr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem;
+  const ordMode=byOrder;
+  for(const r of M.obshiy){ if(filt&&!filt(r))continue;
+    /* В режиме «по дате заказа» выкуп/выручка берутся из разбивки r.ordMs по месяцу
+       заказа, а не из r.y/r.m (месяц продажи). Остальные статьи — всегда по продаже. */
+    if(ordMode&&r.ordMs){
+      for(const k in r.ordMs){ const om=r.ordMs[k];
+        if(y&&om.y!==y)continue; if(mset&&!mset.has(om.m))continue;
+        a.vyks+=om.vyks; a.vykr+=om.vykr; }
+    } else if(!ordMode){
+      if((!y||r.y===y)&&(!mset||mset.has(r.m))){ a.vyks+=r.vyks; a.vykr+=r.vykr; }
+    }
+    if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue;
+    a.zaks+=r.zaks;a.zaksRep+=(r.zaksRep||0);a.zakr+=r.zakr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem;
     /* детализация комиссии (есть только у WB-финотчёта; у EF/Ozon — 0) */
     a.komp+=(r.komp||0);a.ekvBill+=(r.ekvBill||0);
     a.rekWB+=(r.rekWB||0);a.rekMP+=(r.rekMP||0);a.rekBlog+=(r.rekBlog||0);
@@ -30,6 +41,14 @@ function ruleApplies(y,m){
      выручка = только деньги клиента, комиссия = Вознаграждение − Баллы
      (баллы площадка возвращает, это аналог СПП у WB), ДРЛ%/ДРР% — от неё же. */
 let noBonus=false;
+/* Привязка выкупов: по дате продажи (по умолчанию) ↔ по дате заказа покупателем.
+   Меняет только vyks/vykr/kPerech-часть выручки; логистика, хранение, комиссия,
+   реклама, налог остаются по дате продажи (у них нет даты заказа). */
+let byOrder=false;
+function toggleByOrder(){ byOrder=!byOrder;
+  const b=document.getElementById('ordBtn');
+  if(b){ b.classList.toggle('act',byOrder); b.textContent=byOrder?'✓ по дате заказа':'＋ по дате заказа'; }
+  render(); }
 function toggleNoBonus(){ noBonus=!noBonus;
   const b=document.getElementById('ozBtn');
   if(b){ b.classList.toggle('act',noBonus); b.textContent=noBonus?'✓ без Баллов':'＋ без Баллов'; }
@@ -61,6 +80,7 @@ function meas(y,mArr,filt){
   const nbPribOper=nbVykr-nbKom-a.perem-a.dost-a.hran-a.nalog+a.komp;
   const nbPribFact=nbVykr-nbKom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr+a.komp;
   return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr,cena:DIV(vykr,a.vyks),
+    byOrder:!!byOrder,
     perem:a.perem,dost:a.dost,drl:DIV(a.dost,vykr),hran:a.hran,kom,komP:DIV(kom,vykr),nalog:a.nalog,
     pribOper,pribOperP:DIV(pribOper,vykr),postAkr,rek,rekEst,drr:DIV(rek,drrBase),
     pribFact,pribFactP:DIV(pribFact,vykr),

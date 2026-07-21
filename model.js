@@ -583,6 +583,20 @@ async function buildModel(textsOverride){
            +` ║ если медиана ≈95% и «меньше» почти у всех — источники считают выкуп по-разному;`
            +` если расхождение сидит в единицах артикулов — проблема в ключе`});
      }}
+    /* ── Замер даты заказа: выкупы по продаже vs по заказу (из ordMs) ── */
+    {const bySale={},byOrd={}; let shift=0,tot=0,noOrd=0;
+     obEF.forEach(r=>{ if(!r.vyks&&!r.ordMs)return;
+       if(r.vyks){ bySale[r.y]=(bySale[r.y]||0)+r.vyks; tot+=Math.abs(r.vyks); }
+       if(r.ordMs){ for(const k in r.ordMs){ const om=r.ordMs[k];
+         byOrd[om.y]=(byOrd[om.y]||0)+om.vyks;
+         if(om.y!==r.y||om.m!==r.m)shift+=Math.abs(om.vyks); } }
+     });
+     const ys=[...new Set(Object.keys(bySale).concat(Object.keys(byOrd)))].sort();
+     diag.push({name:'Замер: дата заказа vs продажи',status:'ok',rows:0,
+       msg:`сменили месяц: ${shift.toLocaleString('ru-RU')} шт из ${tot.toLocaleString('ru-RU')} (${tot?(shift/tot*100).toFixed(1):'—'}%)`
+         +' ║ выкупы по годам, продажа → заказ: '
+         +ys.map(y=>`${y}: ${Math.round(bySale[y]||0).toLocaleString('ru-RU')} → ${Math.round(byOrd[y]||0).toLocaleString('ru-RU')}`).join(' · ')
+         +' ║ правую сравни с «report: охват» — если сойдётся, режим «по дате заказа» даст нарезку PBI'});}
     /* Заказы: финотчёт → report → доставки (см. fixOrders) */
     fixOrders(obEF,salesEF,'EF');
     /* ── Хранение: добор из листа «Лог+Хран» ──
@@ -832,6 +846,11 @@ async function buildModel(textsOverride){
         const pay=num(r[c_pay]);
         const isSale=(r[c_doctype]||'').trim()==='Продажа';
         const sg=isSale?1:-1;
+        /* дата заказа: копим выкуп/выручку/перечисление по месяцу заказа для этой ячейки */
+        const dO=c_odate?pdate(r[c_odate]):null; const dU=dO||d;
+        const omk=dU.getFullYear()+'-'+(dU.getMonth()+1);
+        const om=o.ordMs[omk]||(o.ordMs[omk]={y:dU.getFullYear(),m:dU.getMonth()+1,vyks:0,vykr:0,kPerech:0});
+        om.vyks+=sg*qty; om.vykr+=sg*retail; om.kPerech+=sg*pay;
         o.vyks      += sg*qty;
         o.vykrGross += sg*retail;
         o.kPerech   += sg*pay;
@@ -926,29 +945,6 @@ async function buildModel(textsOverride){
        vy[d.getFullYear()]=(vy[d.getFullYear()]||0)+sg*intn(r[c_qty]); });
      diag.push({name:'Финотчёт: выкупы по годам',status:'ok',rows:0,
        msg:Object.keys(vy).sort().map(y=>`${y}: ${vy[y].toLocaleString('ru-RU')} шт`).join(' │ ')});}
-    /* ── ЗАМЕР: как легли бы выкупы при привязке к ДАТЕ ЗАКАЗА ──
-       Ничего не меняет, только считает. Нужен, чтобы решить, стоит ли
-       перевешивать модель с «Даты продажи» на «Дату заказа покупателем». */
-    if(c_odate){
-      const byS={},byO={}; let noOd=0,tot=0,shift=0;
-      rr.forEach(r=>{ const rs=(r[c_reason]||'').trim();
-        if(rs!=='Продажа'&&rs!=='Возврат')return;
-        const ds=pdate(r[c_date]); if(!ds)return;
-        const sg=(r[c_doctype]||'').trim()==='Продажа'?1:-1, q=sg*intn(r[c_qty]);
-        tot+=q; byS[ds.getFullYear()]=(byS[ds.getFullYear()]||0)+q;
-        const dо=pdate(r[c_odate]);
-        if(!dо){noOd+=Math.abs(q);return;}
-        byO[dо.getFullYear()]=(byO[dо.getFullYear()]||0)+q;
-        if(dо.getFullYear()!==ds.getFullYear()||dо.getMonth()!==ds.getMonth())shift+=Math.abs(q);
-      });
-      const ys=[...new Set(Object.keys(byS).concat(Object.keys(byO)))].sort();
-      diag.push({name:'Замер: привязка к ДАТЕ ЗАКАЗА',status:'ok',rows:0,
-        msg:`колонка: ${JSON.stringify(c_odate)} · без даты заказа: ${noOd.toLocaleString('ru-RU')} шт`
-          +` · сменили бы месяц: ${shift.toLocaleString('ru-RU')} шт (${tot?(shift/tot*100).toFixed(1):'—'}%)`
-          +' ║ выкупы по годам, продажа → заказ: '
-          +ys.map(y=>`${y}: ${(byS[y]||0).toLocaleString('ru-RU')} → ${(byO[y]||0).toLocaleString('ru-RU')}`).join(' · ')
-          +' ║ сравни правую колонку с «report: охват» — если сойдётся, привязка к заказу даст ту же нарезку, что PBI'});
-    }
     diag.push({name:'Финотчёт: потери выкупов',status:(skip.noDate||skip.noArt)?'warn':'ok',rows:0,
       msg:`Продажа ${skip.saleQty.toLocaleString('ru-RU')} шт − Возврат ${skip.retQty.toLocaleString('ru-RU')} шт`
         +` = нетто ${(skip.saleQty-skip.retQty).toLocaleString('ru-RU')} шт`

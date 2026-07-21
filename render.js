@@ -60,6 +60,25 @@ function ensureNbStyle(){
   document.head.appendChild(st);
 }
 
+function ensureOrdBtn(){
+  const py=document.getElementById('pyBtn'); if(!py)return;
+  let b=document.getElementById('ordBtn');
+  const need=(curCo!=='OZON');   /* у Ozon даты заказа в начислениях нет */
+  if(!b&&need){
+    b=document.createElement('button');
+    b.id='ordBtn'; b.className=py.className;
+    b.title='Выкупы и выручку привязать к дате ЗАКАЗА покупателем, а не к дате продажи. '
+      +'Выкупаемость становится когортной, месяцы сходятся с report/PBI. '
+      +'Логистика, хранение, комиссия, налог остаются по дате продажи.';
+    b.textContent='＋ по дате заказа';
+    b.onclick=toggleByOrder;
+    py.parentNode.insertBefore(b,py.nextSibling);
+  }
+  if(b){ b.style.display=need?'':'none';
+         b.classList.toggle('act',need&&typeof byOrder!=='undefined'&&byOrder);
+         b.textContent=(need&&byOrder)?'✓ по дате заказа':'＋ по дате заказа'; }
+}
+
 function ensureOzBtn(){
   const py=document.getElementById('pyBtn'); if(!py)return;
   let b=document.getElementById('ozBtn');
@@ -100,7 +119,7 @@ function fixNavLabels(){
 
 function render(){
   if(!M.loaded)return;
-  ensureNbStyle(); ensureOzBtn(); ensureAllBtn(); fixNavLabels();
+  ensureNbStyle(); ensureOzBtn(); ensureOrdBtn(); ensureAllBtn(); fixNavLabels();
   if(curTab!=='pl'){renderTab();return;}
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
@@ -123,7 +142,12 @@ function render(){
   } else {
     const dimOf = grpMode==='predmet'? (r=>predmetOf(r.paG)) : (r=>r.paG);
     const acc={},ord={}; const mset=new Set(slicerMonths);
-    for(const r of M.obshiy){ if(r.y!==y||!mset.has(r.m)||!searchOK(r))continue; const d=dimOf(r); acc[d]=(acc[d]||0)+r.vykr; ord[d]=(ord[d]||0)+r.zaks; }
+    const ordMode=(typeof byOrder!=='undefined'&&byOrder);
+    for(const r of M.obshiy){ if(!searchOK(r))continue;
+      const d=dimOf(r);
+      if(ordMode&&r.ordMs){ for(const kk in r.ordMs){ const om=r.ordMs[kk];
+        if(om.y===y&&mset.has(om.m)){ acc[d]=(acc[d]||0)+om.vykr; } } }
+      if(r.y===y&&mset.has(r.m)){ if(!ordMode)acc[d]=(acc[d]||0)+r.vykr; ord[d]=(ord[d]||0)+r.zaks; } }
     let dims=Object.keys(acc).sort((a,b)=>acc[b]-acc[a]);
     if(grpMode==='artikul'){
       /* Показываем ВСЕ артикулы. Схлопывание «<100 заказов → Прочее» убрано:
@@ -189,7 +213,8 @@ function render(){
   const msLbl=selMonths.size&&selMonths.size<12?' · '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'';
   const ymLbl=(grpMode==='ym')?('вся история'+(selMonths.size&&selMonths.size<12
       ?' · только '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'')):'';
+  const ordLbl=(typeof byOrder!=='undefined'&&byOrder&&curCo!=='OZON')?' · по дате заказа':'';
   const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus)?' · + колонки без баллов':'';
-  document.getElementById('matrixSub').textContent=(ymLbl||`год ${y}${msLbl}`)+(q?' · '+q:'')+ozLbl;
+  document.getElementById('matrixSub').textContent=(ymLbl||`год ${y}${msLbl}`)+(q?' · '+q:'')+ordLbl+ozLbl;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
 }
