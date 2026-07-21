@@ -802,6 +802,9 @@ async function buildModel(textsOverride){
     /* Признак старого формата — по отсутствию колонки видов логистики */
     const oldFmt=!c_logType;
     let zaksFallback=0;
+    /* Справочные удержания WB (ПВЗ-возмещение / издержки по перевозке / обработка).
+       По решению: в «Доставку» и в прибыль НЕ входят — копим только для контроля. */
+    const refX={};
     /* Счётчики отброшенных строк — ловят систематическую недостачу выкупов */
     const skip={noDate:0,noArt:0,noArtQty:0,saleQty:0,retQty:0,otherReason:{}};
 
@@ -886,23 +889,19 @@ async function buildModel(textsOverride){
           const q=intn(r[c_dostQty]); o.zaksAlt+=q; zaksFallback+=q;
         }
       }
-      /* ── Возмещение за выдачу на ПВЗ (по артикулам если есть) ── */
+      /* ── СПРАВОЧНЫЕ статьи WB (НЕ входят в «Доставку» и в прибыль) ──
+         «Доставка» = только «Услуги по доставке товара покупателю» (обоснование «Логистика»).
+         Возмещение ПВЗ / издержек по перевозке / обработка — справочные удержания:
+         раньше сваливались в dost и завышали логистику (за 2025 ≈ 1,25 млн). Теперь
+         только копим по годам для контрольной диагностики. */
       else if(reason==='Возмещение за выдачу и возврат товаров на ПВЗ'){
-        const v=num(r[c_pvz]);
-        if(art){const paG=resolveArt(art,pred);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
-        else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
+        const b=refX[d.getFullYear()]||(refX[d.getFullYear()]={pvz:0,vozm:0,obr:0,n:0}); b.pvz+=num(r[c_pvz]); b.n++;
       }
-      /* ── Возмещение издержек по перевозке (по артикулам если есть) ── */
       else if(reason==='Возмещение издержек по перевозке/по складским операциям с товаром'){
-        const v=num(r[c_vozmesh]);
-        if(art){const paG=resolveArt(art,pred);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
-        else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
+        const b=refX[d.getFullYear()]||(refX[d.getFullYear()]={pvz:0,vozm:0,obr:0,n:0}); b.vozm+=num(r[c_vozmesh]); b.n++;
       }
-      /* ── Обработка товара / приёмка ── */
       else if(reason==='Обработка товара'){
-        const v=num(r[c_priemka]);
-        if(art){const paG=resolveArt(art,pred);const o=getOrCreate(k_ym+'|'+paG,paG,d);o.dost+=v;}
-        else{const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;t.priemka+=v;}
+        const b=refX[d.getFullYear()]||(refX[d.getFullYear()]={pvz:0,vozm:0,obr:0,n:0}); b.obr+=num(r[c_priemka]); b.n++;
       }
       /* ── Хранение (без артикула) ── */
       else if(reason==='Хранение'){
@@ -968,6 +967,15 @@ async function buildModel(textsOverride){
         msg:Object.entries(lt).sort().map(([k,v])=>`${k}: ${v.toLocaleString('ru-RU')}`).join(' │ ')});
     }
 
+    /* Контроль: сколько справочных удержаний исключено из «Доставки» (по годам).
+       Для 2025 сумма ≈ 1,25 млн — тот самый разрыв дашборд vs выгрузка. */
+    diag.push({name:'Доставка: исключены справочные статьи',status:'ok',rows:0,
+      msg:Object.keys(refX).length
+        ?Object.keys(refX).sort().map(y=>{const b=refX[y],t=Math.round(b.pvz+b.vozm+b.obr);
+           return `${y}: −${t.toLocaleString('ru-RU')} ₽ (ПВЗ ${Math.round(b.pvz).toLocaleString('ru-RU')} · издержки ${Math.round(b.vozm).toLocaleString('ru-RU')} · обработка ${Math.round(b.obr).toLocaleString('ru-RU')}; ${b.n} стр)`;
+         }).join(' │ ')+' · справочно, НЕ входят в «Доставку» и прибыль'
+        :'справочных удержаний в отчёте нет'});
+
     /* Собираем финальные строки */
     const out=[];
     for(const o of Object.values(map)){
@@ -1003,7 +1011,6 @@ async function buildModel(textsOverride){
       /* rekWB дублирует rek: если у EZFR своя бухгалтерия, rek гасится, а rekWB остаётся для справки */
       if(t.rek)  out.push({paG:'(Удержания WB)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.rek),rekWB:Math.round(t.rek),post:0,nalog:0,hran:0,dost:0,perem:0});
       if(t.shtraf) out.push({paG:'(Штрафы)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.shtraf),post:0,nalog:0,hran:0,dost:0,perem:0});
-      if(t.priemka) out.push({paG:'(Приёмка/ПВЗ)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:Math.round(t.priemka),perem:0});
     }
     return out;
   }
