@@ -60,9 +60,10 @@ function niceCeil(x){ x=Math.abs(x); if(!isFinite(x)||x<=0)return 1;
 function chartBL(labels,bars,line,o){
   o=o||{}; const W=920,H=250,pL=54,pR=54,pT=24,pB=40,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
   const maxB=niceCeil(Math.max(1,...bars.map(v=>Math.abs(v)||0)));
-  const lv=line.filter(v=>isFinite(v)&&v>0); const hasLine=lv.length>0; const maxL=niceCeil(Math.max(1,...lv));
+  const lv=line.filter(v=>isFinite(v)&&v>0); const hasLine=lv.length>0;
+  let maxL=niceCeil(lv.length?Math.max(...lv):1); if(o.lineMax)maxL=Math.min(maxL,o.lineMax);
   const bx=i=>pL+bw*i+bw*0.28,bwid=bw*0.44,by=v=>pT+ih-(Math.max(0,v)/maxB*ih);
-  const lx=i=>pL+bw*i+bw*0.5,ly=v=>pT+ih-(v/maxL*ih);
+  const lx=i=>pL+bw*i+bw*0.5,ly=v=>pT+ih-(Math.min(Math.max(v,0),maxL)/maxL*ih);
   const bc=o.barColor||'var(--blue)',lc=o.lineColor||'var(--amber)',lf=o.lineFmt||(v=>Math.round(v)),bf=o.barFmt||kf;
   const lt=o.leftTitle||'',rt=o.rightTitle||'';
   /* последняя реальная точка (не хвостовые нули) — её метку показываем всегда */
