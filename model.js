@@ -849,6 +849,7 @@ async function buildModel(textsOverride){
         /* дата заказа: копим выкуп/выручку/перечисление по месяцу заказа для этой ячейки */
         const dO=c_odate?pdate(r[c_odate]):null; const dU=dO||d;
         const omk=dU.getFullYear()+'-'+(dU.getMonth()+1);
+        if(!o.ordMs)o.ordMs={};   /* запись могла быть создана раньше (компенсации) — без ordMs */
         const om=o.ordMs[omk]||(o.ordMs[omk]={y:dU.getFullYear(),m:dU.getMonth()+1,vyks:0,vykr:0,kPerech:0});
         om.vyks+=sg*qty; om.vykr+=sg*retail; om.kPerech+=sg*pay;
         o.vyks      += sg*qty;
