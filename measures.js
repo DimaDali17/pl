@@ -11,8 +11,10 @@ function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,
     if(ordMode&&r.ordMs){
       for(const k in r.ordMs){ const om=r.ordMs[k];
         if(y&&om.y!==y)continue; if(mset&&!mset.has(om.m))continue;
-        a.vyks+=om.vyks; a.vykr+=om.vykr; }
-    } else if(!ordMode){
+        a.vyks+=(om.vyks||0); a.vykr+=(om.vykr||0); }
+    } else {
+      /* обычный путь · и откат, если включён режим заказа, но ordMs у строки нет
+         (напр. добор из report, акруалс, или ordMs срезан при сборке model.json) */
       if((!y||r.y===y)&&(!mset||mset.has(r.m))){ a.vyks+=r.vyks; a.vykr+=r.vykr; }
     }
     if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue;

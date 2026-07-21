@@ -584,6 +584,12 @@ async function buildModel(textsOverride){
            +` если расхождение сидит в единицах артикулов — проблема в ключе`});
      }}
     /* ── Замер даты заказа: выкупы по продаже vs по заказу (из ordMs) ── */
+/* контроль доставки ordMs до фронта */
+    {let withOrd=0,q=0; obEF.forEach(r=>{ if(r.ordMs){withOrd++; for(const k in r.ordMs)q+=Math.abs(r.ordMs[k].vyks||0);} });
+     diag.push({name:'ordMs: разбивка по заказу',status:withOrd?'ok':'err',rows:withOrd,
+       msg:withOrd?`строк с ordMs: ${withOrd} · выкупов в разбивке: ${q.toLocaleString('ru-RU')} шт`
+                  :'⚠ ни одной строки с ordMs — режим «по дате заказа» покажет нули (проверь, не срезает ли prebuild.mjs поля при записи model.json)'});}
+    /* ── Замер даты заказа: выкупы по продаже vs по заказу (из ordMs) ── */
     {const bySale={},byOrd={}; let shift=0,tot=0,noOrd=0;
      obEF.forEach(r=>{ if(!r.vyks&&!r.ordMs)return;
        if(r.vyks){ bySale[r.y]=(bySale[r.y]||0)+r.vyks; tot+=Math.abs(r.vyks); }
