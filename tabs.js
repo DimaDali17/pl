@@ -207,14 +207,42 @@ function renderProfit(el,y,q){
   const ytdBars=byYtd.map(x=>`<div class="barrow"><div class="lbl">${x.y} (янв–${MONTHS[curMonth-1].slice(0,3).toLowerCase()})</div><div class="track"><div class="fill ${x.v<0?'neg':''}" style="width:${Math.abs(x.v)/maxYt*100}%"></div></div><div class="num">${fi(x.v)}</div></div>`).join('');
   const cur=all.map(m=>meas(y,[m],searchOK).pribFact), prv=all.map(m=>meas(y-1,[m],searchOK).pribFact);
   const mom=chartGrouped(mns3,cur,prv,v=>v?(v/1e6).toFixed(1).replace('.',','):'');
+  /* ── Таблица 1: Прибыль.Факт по годам (данные под верхними барами) ── */
+  const yCols=['Выручка','Пр.Опер','Пост+акр','Реклама','Пр.Факт','Ф%'];
+  let tYear='<thead><tr><th>Год</th>'
+    +'<th title="Выкуп,руб">Выручка</th><th title="Операционная прибыль">Пр.Опер</th>'
+    +'<th title="Постоянные + акруалс">Пост+акр</th><th>Реклама</th>'
+    +'<th title="Чистая прибыль">Пр.Факт</th><th title="Прибыль ÷ Выручка">Ф%</th>'
+    +'<th title="Прибыль YTD (янв→тек.месяц)">YTD</th></tr></thead><tbody>';
+  M.years.slice().sort((a,b)=>a-b).forEach(yy=>{ const v=meas(yy,all,searchOK),vt=meas(yy,ytd,searchOK);
+    tYear+=`<tr><td>${yy}</td><td>${fi(v.vykr)}</td><td>${fi(v.pribOper)}</td><td>${fi(v.postAkr)}</td>`
+      +`<td>${fi(v.rek)}</td><td>${fi(v.pribFact)}</td><td>${fp(v.pribFactP)}</td><td>${fi(vt.pribFact)}</td></tr>`; });
+  tYear+='</tbody>';
+
+  /* ── Таблица 2: помесячно, текущий год vs прошлый (данные под нижним графиком) ── */
+  let tMonth='<thead><tr><th>Месяц</th>'
+    +`<th>Выручка ${y}</th><th>Пр.Факт ${y}</th><th>Ф% ${y}</th>`
+    +`<th>Пр.Факт ${y-1}</th><th title="Изменение год к году">Δ год</th></tr></thead><tbody>`;
+  all.forEach(m=>{ const v=meas(y,[m],searchOK),vp=meas(y-1,[m],searchOK);
+    const d=v.pribFact-vp.pribFact;
+    tMonth+=`<tr><td>${MONTHS[m-1]}</td><td>${fi(v.vykr)}</td><td>${fi(v.pribFact)}</td>`
+      +`<td>${fp(v.pribFactP)}</td><td>${fi(vp.pribFact)}</td>`
+      +`<td class="${d>0?'pos':d<0?'neg':''}">${d>0?'+':''}${fi(d)}</td></tr>`; });
+  const vT=meas(y,all,searchOK),vpT=meas(y-1,all,searchOK),dT=vT.pribFact-vpT.pribFact;
+  tMonth+=`<tr class="total"><td>Всего</td><td>${fi(vT.vykr)}</td><td>${fi(vT.pribFact)}</td>`
+    +`<td>${fp(vT.pribFactP)}</td><td>${fi(vpT.pribFact)}</td>`
+    +`<td class="${dT>0?'pos':dT<0?'neg':''}">${dT>0?'+':''}${fi(dT)}</td></tr></tbody>`;
+
   el.innerHTML=`
     <div class="chartgrid">
       <div class="chartbox"><div class="chartttl">Прибыль.Факт по годам</div><div style="max-width:460px">${yearBars}</div></div>
       <div class="chartbox"><div class="chartttl">Прибыль YTD (янв → ${MONTHS[curMonth-1].toLowerCase()})</div><div style="max-width:460px">${ytdBars}</div></div>
     </div>
+    ${section('Прибыль по годам','Пр.Опер, Пост+акр, Реклама, Пр.Факт и YTD за каждый год',tYear)}
     <div class="chartbox"><div class="chartttl">Помесячно, млн ₽: ${y} vs ${y-1}</div>
       <div class="leg">${legItem('var(--green)',y,'')+legItem('#B7D9C4',y-1,'')}</div>
-      <div style="max-width:760px">${mom}</div></div>`;
+      <div style="max-width:760px">${mom}</div></div>
+    ${section(`Помесячно · ${y} vs ${y-1}`,'Δ год — изменение чистой прибыли к прошлому году',tMonth)}`;
 }
 /* сгруппированные столбцы: две серии рядом в слоте, с нулевой осью и подписями */
 function chartGrouped(labels,s1,s2,fmt){

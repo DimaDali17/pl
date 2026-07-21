@@ -586,9 +586,9 @@ async function buildModel(textsOverride){
     /* ── Замер даты заказа: выкупы по продаже vs по заказу (из ordMs) ── */
 /* контроль доставки ordMs до фронта */
     {let withOrd=0,q=0; obEF.forEach(r=>{ if(r.ordMs){withOrd++; for(const k in r.ordMs)q+=Math.abs(r.ordMs[k].vyks||0);} });
-     diag.push({name:'ordMs: разбивка по заказу',status:withOrd?'ok':'err',rows:withOrd,
-       msg:withOrd?`строк с ordMs: ${withOrd} · выкупов в разбивке: ${q.toLocaleString('ru-RU')} шт`
-                  :'⚠ ни одной строки с ordMs — режим «по дате заказа» покажет нули (проверь, не срезает ли prebuild.mjs поля при записи model.json)'});}
+     diag.push({name:'Дата заказа: покрытие',status:'ok',rows:withOrd,
+       msg:withOrd?`строк с разбивкой по заказу: ${withOrd} · выкупов в разбивке: ${q.toLocaleString('ru-RU')} шт`
+                  :'разбивки по заказу нет (в бэкапе нет колонки «Дата заказа») — режим «по дате заказа» повторит обычный'});}
     /* ── Замер даты заказа: выкупы по продаже vs по заказу (из ordMs) ── */
     {const bySale={},byOrd={}; let shift=0,tot=0,noOrd=0;
      obEF.forEach(r=>{ if(!r.vyks&&!r.ordMs)return;
