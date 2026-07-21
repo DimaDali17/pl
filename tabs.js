@@ -61,12 +61,14 @@ function chartBL(labels,bars,line,o){
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
   for(let g=1;g<=3;g++){const yy=(pT+ih-ih*g/4).toFixed(1);s+=`<line x1="${pL}" y1="${yy}" x2="${W-pR}" y2="${yy}" stroke="var(--border)" stroke-width="1"/>`;}
   bars.forEach((v,i)=>{const h=Math.max(0,v)/maxB*ih;s+=`<rect x="${bx(i).toFixed(1)}" y="${by(v).toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${bc}" opacity="0.5"/>`;
-    if(bf&&v)s+=`<text x="${lx(i).toFixed(1)}" y="${(by(v)-4).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--ink3)" font-weight="700">${bf(v)}</text>`;});
+    if(bf&&v&&n<=14)s+=`<text x="${lx(i).toFixed(1)}" y="${(by(v)-4).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--ink3)" font-weight="700">${bf(v)}</text>`;});
   const seg=[];line.forEach((v,i)=>{if(isFinite(v)&&v>0)seg.push(`${lx(i).toFixed(1)},${ly(v).toFixed(1)}`);});
   if(seg.length>1)s+=`<polyline points="${seg.join(' ')}" fill="none" stroke="${lc}" stroke-width="2.5"/>`;
   line.forEach((v,i)=>{if(isFinite(v)&&v>0){s+=`<circle cx="${lx(i).toFixed(1)}" cy="${ly(v).toFixed(1)}" r="3" fill="${lc}"/>`;
-    s+=`<text x="${lx(i).toFixed(1)}" y="${(ly(v)-7).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink2)" font-weight="700">${lf(v)}</text>`;}});
-  labels.forEach((L,i)=>{s+=`<text x="${lx(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9.5" fill="var(--ink3)">${L}</text>`;});
+    if(n<=14)s+=`<text x="${lx(i).toFixed(1)}" y="${(ly(v)-7).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink2)" font-weight="700">${lf(v)}</text>`;}});
+  labels.forEach((L,i)=>{ if(L==='')return;
+    const fs=n>28?8:9.5;
+    s+=`<text x="${lx(i).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="${fs}" fill="var(--ink3)">${L}</text>`;});
   return s+'</svg>';
 }
 function chartCard(title,legend,svg){return `<div class="chartbox" style="margin-bottom:14px"><div class="chartttl">${title}</div><div class="leg" style="display:flex;align-items:center;gap:10px">${legend}${scopeToggle()}</div><div class="svgbox">${svg}</div></div>`;}
@@ -79,19 +81,35 @@ function setScope(sc){ chartScope=sc; renderTab(); }
 function scopeToggle(){
   return `<span class="scopesw" style="margin-left:auto;display:inline-flex;gap:4px">`
     +`<button class="mchip ${chartScope==='month'?'on':''}" onclick="setScope('month')" title="Месяцы выбранного года">Месяцы</button>`
-    +`<button class="mchip ${chartScope==='year'?'on':''}" onclick="setScope('year')" title="Все годы за всю историю">Годы</button>`
+    +`<button class="mchip ${chartScope==='ym'?'on':''}" onclick="setScope('ym')" title="Все месяцы всех лет подряд — динамика по всей истории">Мес×Год</button>`
+    +`<button class="mchip ${chartScope==='year'?'on':''}" onclick="setScope('year')" title="Итоги по годам">Годы</button>`
     +`</span>`;
 }
+/* месяц-год по всей истории: [{y,m,label}] только там, где есть данные */
+function scopeYM(){
+  const seen=new Set();
+  for(const r of (M.obshiy||[])){ if(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem||r.postAkr) seen.add(r.y+'-'+String(r.m).padStart(2,'0')); }
+  return [...seen].sort().map(k=>({y:+k.slice(0,4),m:+k.slice(5)}));
+}
 const scopeYears=()=>[...(M.years||[])].sort((a,b)=>a-b);
-function scopeAxis(){ return chartScope==='year' ? scopeYears().map(String) : mns3; }
+function scopeAxis(){
+  if(chartScope==='year') return scopeYears().map(String);
+  if(chartScope==='ym'){ const arr=scopeYM();
+    return arr.map((p,i)=>{ const short=arr.length>28;
+      if(p.m===1||i===0) return short?`'${String(p.y).slice(2)}`:`янв '${String(p.y).slice(2)}`;
+      if(short) return '';                       /* густо → только годовые засечки */
+      return mns3[p.m-1]; }); }
+  return mns3;
+}
 /* fn(год, массивМесяцев) → число */
 function scopeSeries(fn){
   const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
   if(chartScope==='year') return scopeYears().map(yy=>fn(yy,ALL));
+  if(chartScope==='ym')   return scopeYM().map(p=>fn(p.y,[p.m]));
   const y=+document.getElementById('fYear').value;
   return ALL.map(m=>fn(y,[m]));
 }
-const scopeTtl=y=>chartScope==='year'?'по годам · вся история':`по месяцам · ${y}`;
+const scopeTtl=y=>chartScope==='year'?'по годам · вся история':chartScope==='ym'?'по месяцам · вся история':`по месяцам · ${y}`;
 function renderTab(){
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
