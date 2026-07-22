@@ -838,6 +838,7 @@ async function buildModel(textsOverride){
     /* Контроль «Розничной»: копим ДВА варианта — с ×Кол-во и без, чтобы понять,
        задваивает ли умножение (старый бэкап) или цена честно за единицу. */
     const roznChk={};
+    let hranSpread=0,hranLeft=0;   /* сколько хранения разнесено по артикулам / осталось строкой */
 
     const map={};
     const totals={}; /* хранение и удержания без артикула — по месяцам */
@@ -1086,7 +1087,38 @@ async function buildModel(textsOverride){
         komOther:kom-(vv+vvNds+ekvair+pvz)/* остаток (должен быть ≈0) */
       });
     }
-    /* Хранение, удержания, штрафы, приёмка (без артикула) — отдельно по месяцам */
+    /* ── ХРАНЕНИЕ: сумма из финотчёта, атрибуция — по выкупам штук ──
+       В финотчёте хранение приходит строками без артикула. Раньше оно выводилось
+       одной псевдо-строкой «(Хранение)», из-за чего в срезе по артикулам висело
+       отдельно. Теперь месячная сумма раскидывается по артикулам пропорционально
+       выкупленным штукам того же месяца. Итог не меняется ни на рубль: остаток
+       от округления досыпается в самый крупный артикул, а если выкупов за месяц
+       нет вовсе — сумма остаётся строкой «(Хранение)», как раньше. */
+    {
+      const byYM={};                       /* ym → строки-артикулы с выкупами */
+      for(const o of out){ if(o.vyks>0){ const k=o.y+'|'+o.m; (byYM[k]||(byYM[k]=[])).push(o); } }
+      let spread=0,left=0;
+      for(const t of Object.values(totals)){
+        if(!t.hran)continue;
+        const arr=byYM[t.y+'|'+t.m];
+        if(!arr||!arr.length){ left+=t.hran; continue; }   /* некуда разносить */
+        const tot=arr.reduce((a,o)=>a+o.vyks,0);
+        if(!tot){ left+=t.hran; continue; }
+        const target=Math.round(t.hran);
+        let acc=0,big=arr[0];
+        arr.forEach(o=>{ const share=Math.round(target*o.vyks/tot);
+          o.hran=(o.hran||0)+share; acc+=share; if(o.vyks>big.vyks)big=o; });
+        big.hran+=target-acc;              /* хвост округления — крупнейшему артикулу */
+        spread+=target; t.hran=0;
+      }
+      hranSpread=spread; hranLeft=left;
+    }
+    diag.push({name:'Хранение: разнесено по артикулам',status:hranLeft?'warn':'ok',rows:0,
+      msg:`из финотчёта разнесено ${Math.round(hranSpread).toLocaleString('ru-RU')} ₽ пропорционально выкупам штук`
+        +(hranLeft?` · ⚠ осталось строкой «(Хранение)» ${Math.round(hranLeft).toLocaleString('ru-RU')} ₽ (за эти месяцы нет выкупов)`
+                 :' · остатка нет — вся сумма на артикулах')
+        +' · итог по хранению не меняется, меняется только атрибуция'});
+    /* Удержания, штрафы (без артикула) — отдельно по месяцам */
     for(const t of Object.values(totals)){
       if(t.hran) out.push({paG:'(Хранение)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:Math.round(t.hran),dost:0,perem:0});
       /* rekWB дублирует rek: если у EZFR своя бухгалтерия, rek гасится, а rekWB остаётся для справки */
