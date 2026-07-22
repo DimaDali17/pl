@@ -233,6 +233,16 @@ function renderProfit(el,y,q){
   const ytdBars=byYtd.map(x=>`<div class="barrow"><div class="lbl">${x.y} (янв–${MONTHS[curMonth-1].slice(0,3).toLowerCase()})</div><div class="track"><div class="fill ${x.v<0?'neg':''}" style="width:${Math.abs(x.v)/maxYt*100}%"></div></div><div class="num">${fi(x.v)}</div></div>`).join('');
   const cur=all.map(m=>meas(y,[m],searchOK).pribFact), prv=all.map(m=>meas(y-1,[m],searchOK).pribFact);
   const mom=chartGrouped(mns3,cur,prv,v=>v?(v/1e6).toFixed(1).replace('.',','):'');
+  /* ── Динамика выручки и прибыли по ВСЕМ месяцам (масштаб переключается,
+        как на «Пост.Р»): парные столбцы в млн ₽ + приписка % маржи = Пр.Факт ÷ Выкуп,руб ── */
+  const revS=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).vykr);
+  const prfS=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).pribFact);
+  const mlnF=v=>v?(v/1e6).toFixed(1).replace('.',','):'';
+  const margN=revS.map((v,i)=>v?Math.round(prfS[i]/v*100)+'%':'');
+  const dyn=chartCard(`Выручка и прибыль · ${scopeTtl(y)}`,
+    legItem('var(--green)','Выручка, млн ₽',.85)+legItem('#B7D9C4','Пр.Факт, млн ₽',.85)
+      +legItem('var(--ink3)','% маржи (сверху)',.5),
+    chartGrouped(scopeAxis(),revS,prfS,mlnF,'млн ₽',margN));
   /* ── Таблица 1: Прибыль.Факт по годам (данные под верхними барами) ── */
   const yCols=['Выручка','Пр.Опер','Пост+акр','Реклама','Пр.Факт','Ф%'];
   let tYear='<thead><tr><th>Год</th>'
@@ -260,6 +270,7 @@ function renderProfit(el,y,q){
     +`<td class="${dT>0?'pos':dT<0?'neg':''}">${dT>0?'+':''}${fi(dT)}</td></tr></tbody>`;
 
   el.innerHTML=`
+    ${dyn}
     <div class="chartgrid">
       <div class="chartbox"><div class="chartttl">Прибыль.Факт по годам</div><div style="max-width:460px">${yearBars}</div></div>
       <div class="chartbox"><div class="chartttl">Прибыль YTD (янв → ${MONTHS[curMonth-1].toLowerCase()})</div><div style="max-width:460px">${ytdBars}</div></div>
@@ -271,13 +282,16 @@ function renderProfit(el,y,q){
     ${section(`Помесячно · ${y} vs ${y-1}`,'Δ год — изменение чистой прибыли к прошлому году',tMonth)}`;
 }
 /* сгруппированные столбцы: две серии рядом в слоте, с нулевой осью и подписями */
-function chartGrouped(labels,s1,s2,fmt,axisTitle){
-  const W=760,H=205,pL=46,pR=10,pT=22,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
+function chartGrouped(labels,s1,s2,fmt,axisTitle,notes){
+  const W=(labels.length>20)?920:760,H=(notes?222:205),pL=46,pR=10,pT=22,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
   const vals=s1.concat(s2).map(v=>v||0);
   const top=niceCeil(Math.max(0,...vals)||1), rawMin=Math.min(0,...vals), bot=rawMin<0?-niceCeil(-rawMin):0;
   const range=(top-bot)||1;
   const yOf=v=>pT+ih*((top-v)/range), zy=yOf(0), hOf=v=>Math.abs(v)/range*ih;
   const bwid=bw*0.30,gap=bw*0.08;
+  /* при Мес×Год точек под 70 — подписи прореживаем: каждая 5-я + обязательно последняя */
+  let lastI=-1; for(let i=0;i<n;i++){ if((s1[i]||0)||(s2[i]||0))lastI=i; }
+  const show=i=>n<=14||i%5===0||i===lastI;
   let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;font-family:Comfortaa">`;
   /* сетка + шкала слева (млн ₽), ноль выделен */
   for(let g=0;g<=4;g++){ const val=top-range*g/4, yy=yOf(val);
@@ -289,8 +303,10 @@ function chartGrouped(labels,s1,s2,fmt,axisTitle){
     [[s1[i],'var(--green)','var(--red)',-1],[s2[i],'#B7D9C4','#E3AFAF',1]].forEach(([v,colPos,colNeg,side])=>{
       const val=v||0,h=hOf(val),x=side<0?cx-bwid-gap/2:cx+gap/2,yy=val>=0?zy-h:zy,col=val<0?colNeg:colPos;
       s+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${col}"/>`;
-      if(val)s+=`<text x="${(x+bwid/2).toFixed(1)}" y="${(val>=0?yy-3:zy+h+9).toFixed(1)}" text-anchor="middle" font-size="8" fill="${val<0?'var(--red)':'var(--ink3)'}" font-weight="700">${fmt(val)}</text>`;
+      if(val&&show(i))s+=`<text x="${(x+bwid/2).toFixed(1)}" y="${(val>=0?yy-3:zy+h+9).toFixed(1)}" text-anchor="middle" font-size="8" fill="${val<0?'var(--red)':'var(--ink3)'}" font-weight="700">${fmt(val)}</text>`;
     });
+    if(notes&&notes[i]&&show(i))
+      s+=`<text x="${cx.toFixed(1)}" y="12" text-anchor="middle" font-size="8.5" font-weight="700" fill="var(--ink3)">${notes[i]}</text>`;
     s+=`<text x="${cx.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--ink3)">${L}</text>`;
   });
   return s+'</svg>';
