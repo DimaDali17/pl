@@ -781,7 +781,21 @@ async function buildModel(textsOverride){
     const c_uderz=col(H,'Удержания');                                     /* нет в старом формате */
     const c_shtraf=col(H,'Общая сумма штрафов','Total Penalty Amount');
     /* ── детализация комиссии (для вкладок «Разбор» и «Комиссия ВБ») ── */
-    const c_rozn=col(H,'Цена розничная','Retail Price');                     /* за ЕДИНИЦУ → умножаем на Кол-во */
+    /* ── НАСТОЯЩАЯ РОЗНИЦА ──────────────────────────────────────────────
+       «Цена розничная» — зачёркнутая цена ДО скидки продавца. Для P&L не годится:
+       за 2023 она даёт 1 761 ₽/шт при фактической продаже за 530 ₽/шт (скидка 70%),
+       а с 2024 WB стал писать туда почти фактическую цену — из-за этого розница
+       2021–2023 была завышена втрое и «Скидка МП» в «Разборе» раздувалась.
+       Настоящая розница = цена ПОСЛЕ согласованной скидки продавца:
+         новые отчёты — «Цена розничная с учетом согласованной скидки»
+         старые (англ.) — «Retail Price with Agreed Discount»
+       Старая колонка остаётся только как фолбэк, если согласованной нет. */
+    const c_roznBase=col(H,'Цена розничная','Retail Price');                 /* за ЕДИНИЦУ → ×Кол-во */
+    const c_roznSPP=col(H,'Цена розничная с учетом согласованной скидки',
+                          'Цена розничная с учётом согласованной скидки',
+                          'Retail Price with Agreed Discount','Retail Price With Agreed Discount',
+                          'Retail Price with agreed discount','Retail Price With Discount');
+    const c_rozn=(c_roznSPP>-1)?c_roznSPP:c_roznBase;   /* источник розницы для P&L */
     const c_vv=col(H,'Вознаграждение Вайлдберриз (ВВ), без НДС','Wildberries Reward (VV), excluding VAT');
     const c_vvnds=col(H,'НДС с Вознаграждения Вайлдберриз','VAT from Wildberries Reward');
     const c_ekv=col(H,'Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
@@ -869,9 +883,11 @@ async function buildModel(textsOverride){
         o.kPerech   += sg*pay;
         /* компоненты комиссии: ВВ + НДС ВВ + эквайринг + ПВЗ ≡ vykrGross − kPerech */
         o.rozn      += sg*num(r[c_rozn])*qty;
-        {const _rz=num(r[c_rozn]), _y=d.getFullYear();
-         const b=roznChk[_y]||(roznChk[_y]={wq:0,nq:0,real:0,qty:0,n:0,q1:0});
-         b.wq+=sg*_rz*qty; b.nq+=sg*_rz; b.real+=sg*retail; b.qty+=sg*qty; b.n++; if(qty===1)b.q1++;}
+        {const _y=d.getFullYear();
+         const b=roznChk[_y]||(roznChk[_y]={base:0,agr:0,real:0,qty:0,n:0});
+         b.base+=(c_roznBase>-1?sg*num(r[c_roznBase])*qty:0);
+         b.agr +=(c_roznSPP >-1?sg*num(r[c_roznSPP ])*qty:0);
+         b.real+=sg*retail; b.qty+=sg*qty; b.n++;}
         o.vv        += sg*num(r[c_vv]);
         o.vvNds     += sg*num(r[c_vvnds]);
         const ekvV=num(r[c_ekv]), ekvBilled=EKV_BILLED.test(String(c_ekvtype?(r[c_ekvtype]||''):''));
@@ -1014,12 +1030,15 @@ async function buildModel(textsOverride){
        Какой вариант даёт правдоподобную скидку — тот и верен. Если строк с Кол-во=1
        почти 100%, а скидки различаются — значит дело не в qty, а в самой цене. */
     {const ys=Object.keys(roznChk).sort();
-     diag.push({name:'Розничная: ×Кол-во или уже сумма?',status:'ok',rows:ys.length,
-       msg:ys.length?ys.map(y=>{const b=roznChk[y];
-         const dW=b.wq?(1-b.real/b.wq)*100:0, dN=b.nq?(1-b.real/b.nq)*100:0;
-         const aq=b.n?b.qty/b.n:0;
-         return `${y}: реализ ${Math.round(b.real).toLocaleString('ru-RU')} · ×Кол-во ${Math.round(b.wq).toLocaleString('ru-RU')} (скидка ${dW.toFixed(1)}%) · без ×Кол-во ${Math.round(b.nq).toLocaleString('ru-RU')} (скидка ${dN.toFixed(1)}%) · ср.Кол-во ${aq.toFixed(2)} · строк с Кол-во=1: ${b.n?Math.round(b.q1/b.n*100):0}%`;
-       }).join(' │ '):'строк продаж нет'});}
+     const src=(c_roznSPP>-1)?'«с учётом согласованной скидки» (верная)':'⚠ ФОЛБЭК: «Цена розничная» — согласованной колонки в отчёте нет';
+     diag.push({name:'Розничная: источник цены',status:(c_roznSPP>-1)?'ok':'warn',rows:ys.length,
+       msg:`взято: ${src} │ `+(ys.length?ys.map(y=>{const b=roznChk[y];
+         const q=b.qty||1, used=(c_roznSPP>-1)?b.agr:b.base;
+         const dU=used?(1-b.real/used)*100:0;
+         return `${y}: продажа ${Math.round(b.real/q).toLocaleString('ru-RU')} ₽/шт · розница ${Math.round(used/q).toLocaleString('ru-RU')} ₽/шт (скидка ${dU.toFixed(1)}%)`
+           +(c_roznSPP>-1&&c_roznBase>-1?` · зачёркнутая ${Math.round(b.base/q).toLocaleString('ru-RU')} ₽/шт`:'')
+           +` · шт ${Math.round(b.qty).toLocaleString('ru-RU')}`;
+       }).join(' │ '):'строк продаж нет')});}
 
     /* Собираем финальные строки */
     const out=[];
@@ -1045,7 +1064,7 @@ async function buildModel(textsOverride){
         hran:0,dost:Math.round(o.dost),perem:0,
         /* ── детализация для «Разбор» / «Комиссия ВБ» ── */
         ekvBill,                          /* эквайринг отдельным счётом (НЕ удержан из выплаты) */
-        rozn:Math.round(o.rozn),          /* розничная цена до скидки WB */
+        rozn:Math.round(o.rozn),          /* цена после согласованной скидки продавца, до СПП площадки */
         vv,vvNds,ekvair,pvz,              /* компоненты комиссии */
         komOther:kom-(vv+vvNds+ekvair+pvz)/* остаток (должен быть ≈0) */
       });
