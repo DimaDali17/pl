@@ -795,7 +795,11 @@ async function buildModel(textsOverride){
                           'Цена розничная с учётом согласованной скидки',
                           'Retail Price with Agreed Discount','Retail Price With Agreed Discount',
                           'Retail Price with agreed discount','Retail Price With Discount');
-    const c_rozn=(c_roznSPP>-1)?c_roznSPP:c_roznBase;   /* источник розницы для P&L */
+    /* ВНИМАНИЕ: col() возвращает ИМЯ колонки (строку), а не индекс — поэтому
+       проверять надо на истинность (как !c_logType / c_odate? в остальном коде),
+       а НЕ через >-1: сравнение строки с -1 всегда даёт false. */
+    const hasCol=c=>c!==undefined&&c!==null&&c!==''&&c!==-1;   /* работает и для имени-строки, и для индекса */
+    const c_rozn=hasCol(c_roznSPP)?c_roznSPP:c_roznBase;   /* источник розницы для P&L */
     const c_vv=col(H,'Вознаграждение Вайлдберриз (ВВ), без НДС','Wildberries Reward (VV), excluding VAT');
     const c_vvnds=col(H,'НДС с Вознаграждения Вайлдберриз','VAT from Wildberries Reward');
     const c_ekv=col(H,'Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
@@ -885,8 +889,8 @@ async function buildModel(textsOverride){
         o.rozn      += sg*num(r[c_rozn])*qty;
         {const _y=d.getFullYear();
          const b=roznChk[_y]||(roznChk[_y]={base:0,agr:0,real:0,qty:0,n:0});
-         b.base+=(c_roznBase>-1?sg*num(r[c_roznBase])*qty:0);
-         b.agr +=(c_roznSPP >-1?sg*num(r[c_roznSPP ])*qty:0);
+         b.base+=(hasCol(c_roznBase)?sg*num(r[c_roznBase])*qty:0);
+         b.agr +=(hasCol(c_roznSPP )?sg*num(r[c_roznSPP ])*qty:0);
          b.real+=sg*retail; b.qty+=sg*qty; b.n++;}
         o.vv        += sg*num(r[c_vv]);
         o.vvNds     += sg*num(r[c_vvnds]);
@@ -1030,15 +1034,18 @@ async function buildModel(textsOverride){
        Какой вариант даёт правдоподобную скидку — тот и верен. Если строк с Кол-во=1
        почти 100%, а скидки различаются — значит дело не в qty, а в самой цене. */
     {const ys=Object.keys(roznChk).sort();
-     const src=(c_roznSPP>-1)?'«с учётом согласованной скидки» (верная)':'⚠ ФОЛБЭК: «Цена розничная» — согласованной колонки в отчёте нет';
-     diag.push({name:'Розничная: источник цены',status:(c_roznSPP>-1)?'ok':'warn',rows:ys.length,
+     const useSPP=hasCol(c_roznSPP);
+     const src=useSPP?`«${c_roznSPP}» (согласованная — верная)`:`⚠ ФОЛБЭК «${c_roznBase||'—'}»: согласованной колонки не нашлось`;
+     /* Список реальных заголовков про цену — чтобы имя колонки не угадывать */
+     const priceHdrs=(H||[]).filter(h=>/рознич|price|скидк|discount/i.test(String(h))).slice(0,12).join(' · ')||'—';
+     diag.push({name:'Розничная: источник цены',status:useSPP?'ok':'warn',rows:ys.length,
        msg:`взято: ${src} │ `+(ys.length?ys.map(y=>{const b=roznChk[y];
-         const q=b.qty||1, used=(c_roznSPP>-1)?b.agr:b.base;
+         const q=b.qty||1, used=useSPP?b.agr:b.base;
          const dU=used?(1-b.real/used)*100:0;
          return `${y}: продажа ${Math.round(b.real/q).toLocaleString('ru-RU')} ₽/шт · розница ${Math.round(used/q).toLocaleString('ru-RU')} ₽/шт (скидка ${dU.toFixed(1)}%)`
-           +(c_roznSPP>-1&&c_roznBase>-1?` · зачёркнутая ${Math.round(b.base/q).toLocaleString('ru-RU')} ₽/шт`:'')
+           +(useSPP&&hasCol(c_roznBase)?` · зачёркнутая ${Math.round(b.base/q).toLocaleString('ru-RU')} ₽/шт`:'')
            +` · шт ${Math.round(b.qty).toLocaleString('ru-RU')}`;
-       }).join(' │ '):'строк продаж нет')});}
+       }).join(' │ '):'строк продаж нет')+` ║ колонки отчёта про цену: ${priceHdrs}`});}
 
     /* Собираем финальные строки */
     const out=[];
