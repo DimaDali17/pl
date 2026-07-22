@@ -227,6 +227,7 @@ function renderTab(){
   } else if(curTab==='insights'){
     renderInsights(el,y,q);
   }
+  enableSort(el);   /* сортировка по клику на заголовок */
 }
 function renderProfit(el,y,q){
   const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
@@ -375,4 +376,61 @@ function ensureUnitTab(){
       pl.parentNode.insertBefore(d,pl.nextSibling);
     }
   }
+}
+
+/* ═══════════ СОРТИРОВКА ТАБЛИЦ ПО КЛИКУ НА ЗАГОЛОВОК ═══════════
+   Универсально для всех вкладок: вешается на любую <table> с thead/tbody.
+   • первый клик по числовой колонке — по убыванию, второй — по возрастанию;
+   • первая колонка (Месяц/Предмет/Артикул) сортируется как текст;
+   • строки итогов (class="total") всегда остаются внизу и не участвуют;
+   • «—», пустые и нечисловые значения уходят в конец при любом направлении.  */
+function sortVal(td){
+  const t=(td?td.textContent:'').replace(/\u00a0/g,' ').trim();
+  if(!t||t==='—'||t==='-')return null;
+  const n=t.replace(/[\s₽шт]/g,'').replace('%','').replace(',','.').replace(/[^\d.\-+eE]/g,'');
+  if(n===''||n==='-'||isNaN(parseFloat(n)))return null;
+  return parseFloat(n);
+}
+function sortTable(tb,ci,dir){
+  const body=tb.tBodies[0]; if(!body)return;
+  const rows=[...body.rows];
+  const totals=rows.filter(r=>r.classList.contains('total'));   /* итоги — всегда вниз */
+  const data=rows.filter(r=>!r.classList.contains('total'));
+  const nums=data.map(r=>sortVal(r.cells[ci]));
+  const isNum=nums.some(v=>v!==null);
+  data.sort((a,b)=>{
+    if(isNum){
+      const x=sortVal(a.cells[ci]), y=sortVal(b.cells[ci]);
+      if(x===null&&y===null)return 0;
+      if(x===null)return 1; if(y===null)return -1;   /* пустые всегда в конец */
+      return dir==='asc'?x-y:y-x;
+    }
+    const x=(a.cells[ci]?a.cells[ci].textContent:'').trim(),
+          y=(b.cells[ci]?b.cells[ci].textContent:'').trim();
+    return dir==='asc'?x.localeCompare(y,'ru'):y.localeCompare(x,'ru');
+  });
+  data.forEach(r=>body.appendChild(r));
+  totals.forEach(r=>body.appendChild(r));
+}
+function enableSort(root){
+  (root||document).querySelectorAll('table').forEach(tb=>{
+    const head=tb.tHead&&tb.tHead.rows[0]; if(!head||!tb.tBodies[0])return;
+    /* флаг на СТРОКЕ заголовка: innerHTML таблицы перерисовывается, и её ячейки
+       пересоздаются — флаг на самой <table> помешал бы навесить обработчики заново */
+    if(head.dataset.sortOn)return; head.dataset.sortOn='1';
+    [...head.cells].forEach((th,ci)=>{
+      th.style.cursor='pointer';
+      th.title=(th.title?th.title+' · ':'')+'клик — сортировка';
+      th.addEventListener('click',()=>{
+        const cur=(tb.dataset.sortCol==String(ci))?tb.dataset.sortDir:'';
+        /* первый клик: числа — по убыванию, текст — по возрастанию */
+        const first=sortVal(tb.tBodies[0].rows[0]&&tb.tBodies[0].rows[0].cells[ci])!==null?'desc':'asc';
+        const dir=cur?(cur==='desc'?'asc':'desc'):first;
+        sortTable(tb,ci,dir);
+        tb.dataset.sortCol=ci; tb.dataset.sortDir=dir;
+        [...head.cells].forEach(c=>{ c.textContent=c.textContent.replace(/[▲▼]\s*$/,'').trim(); });
+        th.textContent=th.textContent+(dir==='desc'?' ▼':' ▲');
+      });
+    });
+  });
 }

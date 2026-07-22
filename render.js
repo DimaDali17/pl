@@ -194,6 +194,7 @@ function render(){
   };
   rows.forEach(r=>h+=rowHtml(r,false)); h+=rowHtml(tot,true); h+='</tbody>';
   document.getElementById('matrix').innerHTML=h;
+  if(typeof enableSort==='function')enableSort(document.getElementById('matrix').parentNode||document);
 
   /* KPI — сравнение YTD (янв → последний полный месяц) */
   const nowY=new Date().getFullYear(),nowM=new Date().getMonth()+1;
