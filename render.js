@@ -138,7 +138,7 @@ function render(){
     rows=[...seen].sort().map(k=>{ const yy=+k.slice(0,4), mm=+k.slice(5);
       return {label:`${MONTHS[mm-1].slice(0,3)} ${yy}`,v:meas(yy,[mm],searchOK),py:null}; });
   } else if(grpMode==='month'){
-    rows=slicerMonths.map(m=>({label:MONTHS[m-1],v:meas(y,[m],searchOK),py:pyOn?meas(y-1,[m],searchOK):null}));
+    rows=slicerMonths.map(m=>({label:MONTHS[m-1],v:meas(y,[m],searchOK),py:(pyOn&&y)?meas(y-1,[m],searchOK):null}));
   } else {
     const dimOf = grpMode==='predmet'? (r=>predmetOf(r.paG)) : (r=>r.paG);
     const acc={},ord={}; const mset=new Set(slicerMonths);
@@ -146,23 +146,23 @@ function render(){
     for(const r of M.obshiy){ if(!searchOK(r))continue;
       const d=dimOf(r);
       if(ordMode&&r.ordMs){ for(const kk in r.ordMs){ const om=r.ordMs[kk];
-        if(om.y===y&&mset.has(om.m)){ acc[d]=(acc[d]||0)+om.vykr; } } }
-      if(r.y===y&&mset.has(r.m)){ if(!ordMode)acc[d]=(acc[d]||0)+r.vykr; ord[d]=(ord[d]||0)+r.zaks; } }
+        if((!y||om.y===y)&&mset.has(om.m)){ acc[d]=(acc[d]||0)+om.vykr; } } }
+      if((!y||r.y===y)&&mset.has(r.m)){ if(!ordMode)acc[d]=(acc[d]||0)+r.vykr; ord[d]=(ord[d]||0)+r.zaks; } }
     let dims=Object.keys(acc).sort((a,b)=>acc[b]-acc[a]);
     if(grpMode==='artikul'){
       /* Показываем ВСЕ артикулы. Схлопывание «<100 заказов → Прочее» убрано:
          оно прятало и мелочь, и артикулы с битым ключом, из-за чего проблемы
          в данных было не видно. */
-      rows=dims.map(D=>({label:D,v:meas(y,slicerMonths,r=>r.paG===D&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>r.paG===D&&searchOK(r)):null}));
+      rows=dims.map(D=>({label:D,v:meas(y,slicerMonths,r=>r.paG===D&&searchOK(r)),py:(pyOn&&y)?meas(y-1,slicerMonths,r=>r.paG===D&&searchOK(r)):null}));
     } else {
-      rows=dims.map(D=>({label:D,v:meas(y,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)),py:pyOn?meas(y-1,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)):null}));
+      rows=dims.map(D=>({label:D,v:meas(y,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)),py:(pyOn&&y)?meas(y-1,slicerMonths,r=>predmetOf(r.paG)===D&&searchOK(r)):null}));
     }
   }
   /* Итог: незавершённые месяцы (текущий и будущие) в сумму НЕ входят. */
   const totMonths=slicerMonths.filter(m=>monthCompleted(y,m));
   const tot=(grpMode==='ym')
     ? {label:'Всего за всё время',v:meas(0,slicerMonths,searchOK),py:null}
-    : {label:'Всего',v:meas(y,totMonths,searchOK),py:pyOn?meas(y-1,totMonths,searchOK):null};
+    : {label:'Всего',v:meas(y,totMonths,searchOK),py:(pyOn&&y)?meas(y-1,totMonths,searchOK):null};
 
   /* max для баров */
   const CL=activeCols();
@@ -216,6 +216,6 @@ function render(){
       ?' · только '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'')):'';
   const ordLbl=(typeof byOrder!=='undefined'&&byOrder&&curCo!=='OZON')?' · по дате заказа':'';
   const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus)?' · + колонки без баллов':'';
-  document.getElementById('matrixSub').textContent=(ymLbl||`год ${y}${msLbl}`)+(q?' · '+q:'')+ordLbl+ozLbl;
+  document.getElementById('matrixSub').textContent=(ymLbl||(y?`год ${y}${msLbl}`:`за всё время${msLbl}`))+(q?' · '+q:'')+ordLbl+ozLbl;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
 }
