@@ -807,6 +807,9 @@ async function buildModel(textsOverride){
     const refX={};
     /* Счётчики отброшенных строк — ловят систематическую недостачу выкупов */
     const skip={noDate:0,noArt:0,noArtQty:0,saleQty:0,retQty:0,otherReason:{}};
+    /* Контроль «Розничной»: копим ДВА варианта — с ×Кол-во и без, чтобы понять,
+       задваивает ли умножение (старый бэкап) или цена честно за единицу. */
+    const roznChk={};
 
     const map={};
     const totals={}; /* хранение и удержания без артикула — по месяцам */
@@ -866,6 +869,9 @@ async function buildModel(textsOverride){
         o.kPerech   += sg*pay;
         /* компоненты комиссии: ВВ + НДС ВВ + эквайринг + ПВЗ ≡ vykrGross − kPerech */
         o.rozn      += sg*num(r[c_rozn])*qty;
+        {const _rz=num(r[c_rozn]), _y=d.getFullYear();
+         const b=roznChk[_y]||(roznChk[_y]={wq:0,nq:0,real:0,qty:0,n:0,q1:0});
+         b.wq+=sg*_rz*qty; b.nq+=sg*_rz; b.real+=sg*retail; b.qty+=sg*qty; b.n++; if(qty===1)b.q1++;}
         o.vv        += sg*num(r[c_vv]);
         o.vvNds     += sg*num(r[c_vvnds]);
         const ekvV=num(r[c_ekv]), ekvBilled=EKV_BILLED.test(String(c_ekvtype?(r[c_ekvtype]||''):''));
@@ -917,6 +923,15 @@ async function buildModel(textsOverride){
       else if(reason==='Штраф'){
         const t=getTotals(k_ym);t.y=d.getFullYear();t.m=d.getMonth()+1;
         t.shtraf+=num(r[c_shtraf]);
+      }
+      /* ── НЕОБРАБОТАННОЕ обоснование: не проваливаем молча, иначе теряются
+         «Корректная продажа»/«Сторно» и т.п., которые несут К перечислению.
+         Копим по обоснованию×году: сколько строк и сколько К перечислению/реализовано. */
+      else {
+        const rs=reason||'(пусто)', y=d.getFullYear();
+        const key=rs+'@'+y;
+        const o=skip.otherReason[key]||(skip.otherReason[key]={rs,y,n:0,pay:0,real:0});
+        o.n++; o.pay+=num(r[c_pay]); o.real+=num(r[c_retail]);
       }
     });
 
@@ -975,6 +990,36 @@ async function buildModel(textsOverride){
            return `${y}: −${t.toLocaleString('ru-RU')} ₽ (ПВЗ ${Math.round(b.pvz).toLocaleString('ru-RU')} · издержки ${Math.round(b.vozm).toLocaleString('ru-RU')} · обработка ${Math.round(b.obr).toLocaleString('ru-RU')}; ${b.n} стр)`;
          }).join(' │ ')+' · справочно, НЕ входят в «Доставку» и прибыль'
         :'справочных удержаний в отчёте нет'});
+
+    /* Необработанные обоснования — прямая улика по «К перечислению»/«Прочим удержаниям».
+       Если тут «Корректная продажа»/«Сторно» с ненулевым К перечислению — они молча
+       выпадали из kPerech, из-за чего разваливался «Разбор» и комиссия по месяцам. */
+    {const ent=Object.values(skip.otherReason);
+     const totPay=ent.reduce((s,o)=>s+o.pay,0);
+     const byY={}; ent.forEach(o=>{byY[o.y]=(byY[o.y]||0)+o.pay;});
+     diag.push({name:'Финотчёт: необработанные обоснования',status:ent.length?'warn':'ok',
+       rows:ent.reduce((s,o)=>s+o.n,0),
+       msg:ent.length
+         ?'НЕ учтены (К перечислению теряется): '
+           +ent.sort((a,b)=>Math.abs(b.pay)-Math.abs(a.pay)).slice(0,12)
+              .map(o=>`«${o.rs}» ${o.y}: ${o.n}стр · К переч ${Math.round(o.pay).toLocaleString('ru-RU')} · реализ ${Math.round(o.real).toLocaleString('ru-RU')}`).join(' │ ')
+           +` · Σ К переч не учтено: ${Math.round(totPay).toLocaleString('ru-RU')} ₽`
+           +(byY[2026]?` · в т.ч. 2026: ${Math.round(byY[2026]).toLocaleString('ru-RU')} ₽`:'')
+         :'все обоснования обработаны'});}
+
+    /* РЕШАЮЩИЙ ТЕСТ по «Розничной цене» (баг 2021–2023: розница 83,9 млн при выручке 25,3 млн).
+       Для каждого года показываем скидку при двух трактовках «Цена розничная»:
+         ×Кол-во  — как сейчас в коде (цена за единицу)
+         без ×Кол-во — если в строке уже сумма по строке (агрегированный бэкап)
+       Какой вариант даёт правдоподобную скидку — тот и верен. Если строк с Кол-во=1
+       почти 100%, а скидки различаются — значит дело не в qty, а в самой цене. */
+    {const ys=Object.keys(roznChk).sort();
+     diag.push({name:'Розничная: ×Кол-во или уже сумма?',status:'ok',rows:ys.length,
+       msg:ys.length?ys.map(y=>{const b=roznChk[y];
+         const dW=b.wq?(1-b.real/b.wq)*100:0, dN=b.nq?(1-b.real/b.nq)*100:0;
+         const aq=b.n?b.qty/b.n:0;
+         return `${y}: реализ ${Math.round(b.real).toLocaleString('ru-RU')} · ×Кол-во ${Math.round(b.wq).toLocaleString('ru-RU')} (скидка ${dW.toFixed(1)}%) · без ×Кол-во ${Math.round(b.nq).toLocaleString('ru-RU')} (скидка ${dN.toFixed(1)}%) · ср.Кол-во ${aq.toFixed(2)} · строк с Кол-во=1: ${b.n?Math.round(b.q1/b.n*100):0}%`;
+       }).join(' │ '):'строк продаж нет'});}
 
     /* Собираем финальные строки */
     const out=[];
