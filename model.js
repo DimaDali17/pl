@@ -790,16 +790,22 @@ async function buildModel(textsOverride){
          новые отчёты — «Цена розничная с учетом согласованной скидки»
          старые (англ.) — «Retail Price with Agreed Discount»
        Старая колонка остаётся только как фолбэк, если согласованной нет. */
-    const c_roznBase=col(H,'Цена розничная','Retail Price');                 /* за ЕДИНИЦУ → ×Кол-во */
-    const c_roznSPP=col(H,'Цена розничная с учетом согласованной скидки',
-                          'Цена розничная с учётом согласованной скидки',
-                          'Retail Price with Agreed Discount','Retail Price With Agreed Discount',
-                          'Retail Price with agreed discount','Retail Price With Discount');
+    /* col() сопоставляет нестрого — а теперь в отчёте ДВЕ похожие ценовые колонки,
+       и он может схватить не ту. Поэтому ищем их ТОЧНО по заголовку. */
+    const exactCol=(...names)=>{ for(const n of names){ if(H&&H.indexOf(n)>-1)return n; } return undefined; };
+    const c_roznBase=exactCol('Цена розничная','Retail Price')||col(H,'Цена розничная','Retail Price');
+    const c_roznSPP=exactCol('Цена розничная с учетом согласованной скидки',
+                             'Цена розничная с учётом согласованной скидки',
+                             'Retail Price with Agreed Discount');
     /* ВНИМАНИЕ: col() возвращает ИМЯ колонки (строку), а не индекс — поэтому
        проверять надо на истинность (как !c_logType / c_odate? в остальном коде),
        а НЕ через >-1: сравнение строки с -1 всегда даёт false. */
     const hasCol=c=>c!==undefined&&c!==null&&c!==''&&c!==-1;   /* работает и для имени-строки, и для индекса */
-    const c_rozn=hasCol(c_roznSPP)?c_roznSPP:c_roznBase;   /* источник розницы для P&L */
+    /* col() сопоставляет заголовки НЕСТРОГО: длинный алиас «…с учетом согласованной
+       скидки» может срезолвиться на короткую «Цена розничная». Поэтому засчитываем
+       согласованную колонку, только если она РЕАЛЬНО другая. */
+    const useSPP=hasCol(c_roznSPP)&&String(c_roznSPP)!==String(c_roznBase);
+    const c_rozn=useSPP?c_roznSPP:c_roznBase;   /* источник розницы для P&L */
     const c_vv=col(H,'Вознаграждение Вайлдберриз (ВВ), без НДС','Wildberries Reward (VV), excluding VAT');
     const c_vvnds=col(H,'НДС с Вознаграждения Вайлдберриз','VAT from Wildberries Reward');
     const c_ekv=col(H,'Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
@@ -1034,8 +1040,8 @@ async function buildModel(textsOverride){
        Какой вариант даёт правдоподобную скидку — тот и верен. Если строк с Кол-во=1
        почти 100%, а скидки различаются — значит дело не в qty, а в самой цене. */
     {const ys=Object.keys(roznChk).sort();
-     const useSPP=hasCol(c_roznSPP);
-     const src=useSPP?`«${c_roznSPP}» (согласованная — верная)`:`⚠ ФОЛБЭК «${c_roznBase||'—'}»: согласованной колонки не нашлось`;
+     const src=useSPP?`«${c_roznSPP}» (согласованная — верная)`
+        :`⚠ ФОЛБЭК «${c_roznBase||'—'}» (зачёркнутая цена ДО скидки): колонки «Цена розничная с учетом согласованной скидки» в выгрузке НЕТ — её нужно добавить в экспорт финотчёта`;
      /* Список реальных заголовков про цену — чтобы имя колонки не угадывать */
      const priceHdrs=(H||[]).filter(h=>/рознич|price|скидк|discount/i.test(String(h))).slice(0,12).join(' · ')||'—';
      diag.push({name:'Розничная: источник цены',status:useSPP?'ok':'warn',rows:ys.length,

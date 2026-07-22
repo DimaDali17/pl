@@ -16,7 +16,7 @@ import * as XLSX from 'xlsx';
 
 const ROOT      = process.cwd();   /* Actions запускает из корня репо; скрипт может лежать где угодно */
 const CACHE_DIR = path.join(ROOT, 'cache');
-const CACHE_VER = 'v8';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
+const CACHE_VER = 'v9';   /* поднять при любом изменении WBFIN_COLS — иначе кэш отдаст старые CSV */
 const OUT_FILE  = path.join(ROOT, 'data', 'model.json');
 
 /* Только эти колонки едут дальше: 19 из 84.
@@ -34,6 +34,13 @@ const WBFIN_COLS = [
   ['Дата продажи'],
   ['Кол-во'],
   ['Цена розничная'],
+  /* НАСТОЯЩАЯ розница для P&L: цена ПОСЛЕ согласованной скидки продавца.
+     «Цена розничная» — зачёркнутая цена ДО скидки: за 2023 она даёт 1 761 ₽/шт
+     при фактической продаже за 530 ₽/шт (скидка 70%), из-за чего «Разбор»
+     показывал розницу 83,9 млн вместо реальной. parseWBFin берёт эту колонку,
+     а на зачёркнутую откатывается, только если её нет. */
+  ['Цена розничная с учетом согласованной скидки',
+   'Цена розничная с учётом согласованной скидки'],
   ['Вайлдберриз реализовал Товар (Пр)'],
   ['Возмещение за выдачу и возврат товаров на ПВЗ'],
   /* ВНИМАНИЕ: рядом в отчёте лежат «Размер комиссии за эквайринг…, %» и
@@ -81,6 +88,9 @@ const EN2RU_HEAD = {
   'Sale Date':'Дата продажи',
   'Quantity':'Кол-во',
   'Retail Price':'Цена розничная',
+  'Retail Price with Agreed Discount':'Цена розничная с учетом согласованной скидки',
+  'Retail Price With Agreed Discount':'Цена розничная с учетом согласованной скидки',
+  'Retail Price with agreed discount':'Цена розничная с учетом согласованной скидки',
   'Wildberries Realized Goods (Pr)':'Вайлдберриз реализовал Товар (Пр)',
   'Compensation for the issuance and return of goods at PVZ':'Возмещение за выдачу и возврат товаров на ПВЗ',
   'Compensation for Acquiring Expenses':'Компенсация платёжных услуг/Комиссия за интеграцию платёжных сервисов',
@@ -170,7 +180,7 @@ function xlsxToCSV(buf, fname) {
   const realMiss = miss.filter(m => !OK_MISSING.has(m));
   if (realMiss.length) {
     warn(`${fname}: нет колонок → ${realMiss.join(' | ')}`);
-    const hints = aoa[0].filter(h => /эквайр|платеж|платёж|приемк|приёмк|комисси/i.test(String(h)));
+    const hints = aoa[0].filter(h => /эквайр|платеж|платёж|приемк|приёмк|комисси|рознич|скидк/i.test(String(h)));
     if (hints.length) warn(`   похожие колонки в файле: ${hints.join(' | ')}`);
   }
 
