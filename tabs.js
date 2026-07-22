@@ -108,10 +108,18 @@ function scopeToggle(){
     +`</span>`;
 }
 /* месяц-год по всей истории: [{y,m,label}] только там, где есть данные */
+/* Чипсы месяцев из шапки фильтруют ВСЕ графики (как и таблицы). Фильтр года
+   действует только в масштабе «Месяцы» — у «Мес×Год»/«Годы» смысл в том, чтобы
+   показать всю историю, там год намеренно не применяется. */
+function selMonthsArr(){
+  const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
+  return (typeof selMonths!=='undefined'&&selMonths.size)?ALL.filter(m=>selMonths.has(m)):ALL;
+}
 function scopeYM(){
+  const mset=new Set(selMonthsArr());
   const seen=new Set();
   for(const r of (M.obshiy||[])){ if(r.vyks||r.zaks||r.vykr||r.dost||r.hran||r.rek||r.perem||r.postAkr) seen.add(r.y+'-'+String(r.m).padStart(2,'0')); }
-  return [...seen].sort().map(k=>({y:+k.slice(0,4),m:+k.slice(5)}));
+  return [...seen].sort().map(k=>({y:+k.slice(0,4),m:+k.slice(5)})).filter(p=>mset.has(p.m));
 }
 const scopeYears=()=>[...(M.years||[])].sort((a,b)=>a-b);
 function scopeAxis(){
@@ -121,15 +129,15 @@ function scopeAxis(){
       if(p.m===1||i===0) return short?`'${String(p.y).slice(2)}`:`янв '${String(p.y).slice(2)}`;
       if(short) return '';                       /* густо → только годовые засечки */
       return mns3[p.m-1]; }); }
-  return mns3;
+  return selMonthsArr().map(m=>mns3[m-1]);
 }
 /* fn(год, массивМесяцев) → число */
 function scopeSeries(fn){
-  const ALL=[1,2,3,4,5,6,7,8,9,10,11,12];
-  if(chartScope==='year') return scopeYears().map(yy=>fn(yy,ALL));
+  const MS=selMonthsArr();
+  if(chartScope==='year') return scopeYears().map(yy=>fn(yy,MS));
   if(chartScope==='ym')   return scopeYM().map(p=>fn(p.y,[p.m]));
   const y=+document.getElementById('fYear').value;
-  return ALL.map(m=>fn(y,[m]));
+  return MS.map(m=>fn(y,[m]));
 }
 const scopeTtl=y=>chartScope==='year'?'по годам · вся история':chartScope==='ym'?'по месяцам · вся история':`по месяцам · ${y}`;
 function renderTab(){
@@ -241,7 +249,7 @@ function renderProfit(el,y,q){
   const margN=revS.map((v,i)=>v?Math.round(prfS[i]/v*100)+'%':'');
   const dyn=chartCard(`Выручка и прибыль · ${scopeTtl(y)}`,
     legItem('var(--green)','Выручка, млн ₽',.85)+legItem('#B7D9C4','Пр.Факт, млн ₽',.85)
-      +legItem('var(--ink3)','% маржи (сверху)',.5),
+      +legItem('var(--ink3)','% маржи — в скобках у прибыли',.5),
     chartGrouped(scopeAxis(),revS,prfS,mlnF,'млн ₽',margN));
   /* ── Таблица 1: Прибыль.Факт по годам (данные под верхними барами) ── */
   const yCols=['Выручка','Пр.Опер','Пост+акр','Реклама','Пр.Факт','Ф%'];
@@ -283,7 +291,7 @@ function renderProfit(el,y,q){
 }
 /* сгруппированные столбцы: две серии рядом в слоте, с нулевой осью и подписями */
 function chartGrouped(labels,s1,s2,fmt,axisTitle,notes){
-  const W=(labels.length>20)?920:760,H=(notes?222:205),pL=46,pR=10,pT=22,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
+  const W=(labels.length>20)?920:760,H=205,pL=46,pR=10,pT=22,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
   const vals=s1.concat(s2).map(v=>v||0);
   const top=niceCeil(Math.max(0,...vals)||1), rawMin=Math.min(0,...vals), bot=rawMin<0?-niceCeil(-rawMin):0;
   const range=(top-bot)||1;
@@ -300,13 +308,13 @@ function chartGrouped(labels,s1,s2,fmt,axisTitle,notes){
   s+=`<text transform="rotate(-90 12 ${(pT+ih/2).toFixed(1)})" x="12" y="${(pT+ih/2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--ink3)">${axisTitle||'млн ₽'}</text>`;
   s+=`<line x1="${pL}" y1="${zy.toFixed(1)}" x2="${W-pR}" y2="${zy.toFixed(1)}" stroke="var(--border2)" stroke-width="1.4"/>`;
   labels.forEach((L,i)=>{ const cx=pL+bw*i+bw/2;
-    [[s1[i],'var(--green)','var(--red)',-1],[s2[i],'#B7D9C4','#E3AFAF',1]].forEach(([v,colPos,colNeg,side])=>{
+    [[s1[i],'var(--green)','var(--red)',-1,0],[s2[i],'#B7D9C4','#E3AFAF',1,1]].forEach(([v,colPos,colNeg,side,isPrf])=>{
       const val=v||0,h=hOf(val),x=side<0?cx-bwid-gap/2:cx+gap/2,yy=val>=0?zy-h:zy,col=val<0?colNeg:colPos;
       s+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bwid.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${col}"/>`;
-      if(val&&show(i))s+=`<text x="${(x+bwid/2).toFixed(1)}" y="${(val>=0?yy-3:zy+h+9).toFixed(1)}" text-anchor="middle" font-size="8" fill="${val<0?'var(--red)':'var(--ink3)'}" font-weight="700">${fmt(val)}</text>`;
+      /* маржа — в скобках рядом со значением прибыли, мельче основного числа */
+      const nt=(isPrf&&notes&&notes[i]&&show(i))?`<tspan font-size="6.5" font-weight="600" fill="var(--ink3)"> (${notes[i]})</tspan>`:'';
+      if(val&&show(i))s+=`<text x="${(x+bwid/2).toFixed(1)}" y="${(val>=0?yy-3:zy+h+9).toFixed(1)}" text-anchor="middle" font-size="8" fill="${val<0?'var(--red)':'var(--ink3)'}" font-weight="700">${fmt(val)}${nt}</text>`;
     });
-    if(notes&&notes[i]&&show(i))
-      s+=`<text x="${cx.toFixed(1)}" y="12" text-anchor="middle" font-size="8.5" font-weight="700" fill="var(--ink3)">${notes[i]}</text>`;
     s+=`<text x="${cx.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--ink3)">${L}</text>`;
   });
   return s+'</svg>';
