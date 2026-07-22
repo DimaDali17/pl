@@ -9,7 +9,9 @@ function switchCo(c){
   if(curTab==='pl')render(); else renderTab();
 }
 function tab(p){ curTab=p; document.querySelectorAll('#tabs .tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
-  ['pl','profit','adv','log','fix','check','razbor','komwb','insights'].forEach(x=>document.getElementById('page-'+x).style.display=x===p?'block':'none');
+  ensureUnitTab();
+  ['pl','unit','profit','adv','log','fix','check','razbor','komwb','insights'].forEach(x=>{
+    const pg=document.getElementById('page-'+x); if(pg)pg.style.display=(x===p?'block':'none'); });
   document.getElementById('grpWrap').style.display=p==='pl'?'flex':'none';
   document.getElementById('pyWrap').style.display=p==='pl'?'flex':'none';
   if(M.loaded){ if(p==='pl')render(); else renderTab(); }
@@ -131,9 +133,11 @@ function scopeSeries(fn){
 }
 const scopeTtl=y=>chartScope==='year'?'по годам · вся история':chartScope==='ym'?'по месяцам · вся история':`по месяцам · ${y}`;
 function renderTab(){
+  ensureUnitTab();
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
   const el=document.getElementById('page-'+curTab);
+  if(!el)return;
   const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
   const all=[1,2,3,4,5,6,7,8,9,10,11,12];
   /* месяцы из общего мультивыбора (пусто = все) */
@@ -147,7 +151,7 @@ function renderTab(){
     const rekM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).rek), drrM=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).drr);
     const chart=chartCard(`Реклама и ДРР ${scopeTtl(y)}`,
       legItem('var(--amber)','Реклама, ₽',.7)+legItem('var(--blue)','ДРР.Or%'),
-      chartBL(scopeAxis(),rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf,leftTitle:'₽',rightTitle:'ДРР %'}));
+      chartBL(scopeAxis(),rekM,drrM,{barColor:'var(--amber)',lineColor:'var(--blue)',lineFmt:v=>(v*100).toFixed(1)+'%',barFmt:kf,leftTitle:'₽',rightTitle:'ДРР %',lineMax:0.5}));
     const cols=[
       {l:'Выкуп,шт',t:'Выкуплено штук',fn:(m,f)=>fi(meas(y,m,f).vyks)},
       {l:'Выкуп,руб',t:'Выручка (gross) из финотчёта маркетплейса — что заплатил покупатель. У Ozon — Выручка + Баллы за скидки',fn:(m,f)=>fi(meas(y,m,f).vykr)},
@@ -204,6 +208,8 @@ function renderTab(){
       {l:'Ср.Чек PY',t:'Ср.Чек Заказа прошлого года',fn:(m,f)=>fi(meas(y-1,m,f).srchek)},
     ];
     tabTables(el,chart,'Средний чек','Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт',cols,y,q,sM);
+  } else if(curTab==='unit'){
+    renderUnit(el,y,q,sM);
   } else if(curTab==='razbor'){
     renderRazbor(el,y,q,sM);
   } else if(curTab==='komwb'){
@@ -265,7 +271,7 @@ function renderProfit(el,y,q){
     ${section(`Помесячно · ${y} vs ${y-1}`,'Δ год — изменение чистой прибыли к прошлому году',tMonth)}`;
 }
 /* сгруппированные столбцы: две серии рядом в слоте, с нулевой осью и подписями */
-function chartGrouped(labels,s1,s2,fmt){
+function chartGrouped(labels,s1,s2,fmt,axisTitle){
   const W=760,H=205,pL=46,pR=10,pT=22,pB=26,iw=W-pL-pR,ih=H-pT-pB,n=labels.length,bw=iw/n;
   const vals=s1.concat(s2).map(v=>v||0);
   const top=niceCeil(Math.max(0,...vals)||1), rawMin=Math.min(0,...vals), bot=rawMin<0?-niceCeil(-rawMin):0;
@@ -277,7 +283,7 @@ function chartGrouped(labels,s1,s2,fmt){
   for(let g=0;g<=4;g++){ const val=top-range*g/4, yy=yOf(val);
     s+=`<line x1="${pL}" y1="${yy.toFixed(1)}" x2="${W-pR}" y2="${yy.toFixed(1)}" stroke="var(--border)" stroke-width="1" opacity="0.5"/>`;
     s+=`<text x="${pL-6}" y="${(yy+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink3)">${fmt(val)||'0'}</text>`; }
-  s+=`<text transform="rotate(-90 12 ${(pT+ih/2).toFixed(1)})" x="12" y="${(pT+ih/2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--ink3)">млн ₽</text>`;
+  s+=`<text transform="rotate(-90 12 ${(pT+ih/2).toFixed(1)})" x="12" y="${(pT+ih/2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--ink3)">${axisTitle||'млн ₽'}</text>`;
   s+=`<line x1="${pL}" y1="${zy.toFixed(1)}" x2="${W-pR}" y2="${zy.toFixed(1)}" stroke="var(--border2)" stroke-width="1.4"/>`;
   labels.forEach((L,i)=>{ const cx=pL+bw*i+bw/2;
     [[s1[i],'var(--green)','var(--red)',-1],[s2[i],'#B7D9C4','#E3AFAF',1]].forEach(([v,colPos,colNeg,side])=>{
@@ -288,4 +294,61 @@ function chartGrouped(labels,s1,s2,fmt){
     s+=`<text x="${cx.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--ink3)">${L}</text>`;
   });
   return s+'</svg>';
+}
+
+/* ═══════════ ВКЛАДКА «UNIT» — тот же P&L, делённый на Выкуп,шт ═══════════
+   Денежные колонки → ₽ на одну выкупленную штуку. Проценты (Вкп%, ДРЛ%, Ком%,
+   Оп%, ДРР%, Ф%) — это отношения, от деления не меняются, показываем как в P&L.
+   «Ср.Чек» в юнит-разрезе не дублируем: он по определению = Выкуп,руб ÷ Выкуп,шт,
+   то есть это и есть колонка «Выкуп,руб/шт». */
+const UNIT_MONEY=new Set(['zakr','vykr','perem','dost','hran','kom','nalog','pribOper','postAkr','rek','pribFact']);
+function unitCols(y){
+  const out=[];
+  COLS.forEach(c=>{
+    if(c.k==='cena')return;                      /* == Выкуп,руб/шт, не дублируем */
+    if(c.k==='vyks'){ out.push({l:'Выкуп,шт',t:'Выкуплено штук — знаменатель всех колонок ₽/шт',
+      fn:(m,f)=>fi(meas(y,m,f).vyks)}); return; }
+    if(UNIT_MONEY.has(c.k)){ out.push({l:c.l+'/шт',t:(c.t||c.l)+' · на одну выкупленную штуку',
+      fn:(m,f)=>{const k=meas(y,m,f);return k.vyks?fi(k[c.k]/k.vyks):'—';}}); return; }
+    out.push({l:c.l,t:c.t||c.l,fn:(m,f)=>c.f(meas(y,m,f)[c.k])});
+  });
+  return out;
+}
+function renderUnit(el,y,q,sM){
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
+  const K=meas(y,sM,searchOK);
+  const pu=(k,f)=>k.vyks?k[f]/k.vyks:0;
+  const rev=scopeSeries((yy,mm)=>pu(meas(yy,mm,searchOK),'vykr'));
+  const prf=scopeSeries((yy,mm)=>pu(meas(yy,mm,searchOK),'pribFact'));
+  const chart=chartCard(`Юнит-экономика · ${scopeTtl(y)}`,
+    legItem('var(--green)','Выручка ₽/шт',.85)+legItem('#B7D9C4','Пр.Факт ₽/шт',.85),
+    chartGrouped(scopeAxis(),rev,prf,v=>v?Math.round(v):'','₽/шт'));
+  const sub=K.vyks
+    ?`выкуплено ${fi(K.vyks)} шт · выручка ${fi(pu(K,'vykr'))} ₽/шт · переменные ${fi(pu(K,'perem'))} ₽/шт · `
+      +`логистика ${fi(pu(K,'dost'))} ₽/шт · прибыль ${fi(pu(K,'pribFact'))} ₽/шт · проценты — как в P&L`
+    :'за период нет выкупов — делить не на что';
+  tabTables(el,chart,'Unit',sub,unitCols(y),y,q,sM);
+}
+/* Кнопка вкладки и её контейнер создаются из кода: index.html не правим */
+function ensureUnitTab(){
+  const tabsBox=document.getElementById('tabs');
+  if(tabsBox&&!tabsBox.querySelector('[data-p="unit"]')){
+    const proto=tabsBox.querySelector('.tab');
+    if(proto){
+      const b=document.createElement(proto.tagName);
+      b.className=proto.className.replace(/\bon\b/,'').trim();
+      b.dataset.p='unit'; b.textContent='Unit';
+      b.title='P&L в пересчёте на одну выкупленную штуку (₽/шт)';
+      b.onclick=()=>tab('unit');
+      const pl=tabsBox.querySelector('[data-p="pl"]');
+      if(pl&&pl.nextSibling)tabsBox.insertBefore(b,pl.nextSibling); else tabsBox.appendChild(b);
+    }
+  }
+  if(!document.getElementById('page-unit')){
+    const pl=document.getElementById('page-pl');
+    if(pl&&pl.parentNode){
+      const d=document.createElement('div'); d.id='page-unit'; d.style.display='none';
+      pl.parentNode.insertBefore(d,pl.nextSibling);
+    }
+  }
 }
