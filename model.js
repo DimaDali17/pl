@@ -764,7 +764,11 @@ async function buildModel(textsOverride){
     const c_reason=col(H,'Обоснование для оплаты','Reason for Payment');
     const c_doctype=col(H,'Тип документа','Document Type');
     const c_date=col(H,'Дата продажи','Sale Date');
-    const c_odate=col(H,'Дата заказа покупателем','Order Date by the Buyer','Дата заказа');
+    /* точный поиск: нестрогий col() не должен привязаться к «Дате продажи» */
+    const c_odate=(H&&(H.indexOf('Дата заказа покупателем')>-1?'Дата заказа покупателем'
+                      :H.indexOf('Дата заказа')>-1?'Дата заказа'
+                      :H.indexOf('Order Date by the Buyer')>-1?'Order Date by the Buyer':undefined))
+                  ||col(H,'Дата заказа покупателем','Order Date by the Buyer','Дата заказа');
     const c_qty=col(H,'Кол-во','Quantity');
     const c_retail=col(H,'Вайлдберриз реализовал Товар (Пр)','Вайлдберриз реализовал Товар','Вайлдберриз реализовал товар (Пр)','Wildberries Realized Goods (Pr)');
     const c_pay=col(H,'К перечислению Продавцу за реализованный Товар','К перечислению Продавцу','Amount to Transfer to the Seller for the Realized Goods');
