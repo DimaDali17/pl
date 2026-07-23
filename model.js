@@ -1180,6 +1180,7 @@ async function buildModel(textsOverride){
     const OZ_GRP_REK=new Set(['Продвижение и реклама']);
     const OZ_GRP_KOMP=new Set(['Компенсации и декомпенсации']);
     const ozUnk={};   /* тип → сумма, попавшая по фолбэку (для диагностики) */
+    const ozL={};     /* построчный просмотр: тип×группа×месяц (на расчёты не влияет) */
 
     const map={};
 
@@ -1208,22 +1209,34 @@ async function buildModel(textsOverride){
         if(typ==='Выручка') o.salesQty+=qty;
         if(typ==='Логистика') o.orderQty+=qty;
 
-        /* Рубли — единая цепочка по ТИПУ начисления (PBI-совместимо) */
-        if(typ==='Выручка') o.salesRub+=s;
-        else if(typ==='Баллы за скидки') o.bonusRub+=s;
-        else if(typ==='Возврат выручки') o.returnRub+=s;
-        else if(typ==='Программы партнёров') o.partnerRub+=s;
-        else if(typ==='Вознаграждение за продажу'||typ==='Возврат вознаграждения') o.kom+=s;
-        else if(OZ_LOG_TYPES.has(typ)) o.log+=s;
-        else if(OZ_REK_TYPES.has(typ)) o.rek+=s;
+        /* Рубли — единая цепочка по ТИПУ начисления (PBI-совместимо).
+           buck — только пометка «куда легла строка» для построчного просмотра,
+           на арифметику не влияет. */
+        let buck='';
+        if(typ==='Выручка'){ o.salesRub+=s; buck='Выручка'; }
+        else if(typ==='Баллы за скидки'){ o.bonusRub+=s; buck='Баллы'; }
+        else if(typ==='Возврат выручки'){ o.returnRub+=s; buck='Возврат выручки'; }
+        else if(typ==='Программы партнёров'){ o.partnerRub+=s; buck='Партнёры'; }
+        else if(typ==='Вознаграждение за продажу'||typ==='Возврат вознаграждения'){ o.kom+=s; buck='Комиссия'; }
+        else if(OZ_LOG_TYPES.has(typ)){ o.log+=s; buck='Логистика'; }
+        else if(OZ_REK_TYPES.has(typ)){ o.rek+=s; buck='Реклама'; }
         else {
             const g=String(r[c_grp]||'').trim();
-            if(OZ_GRP_REK.has(g)) o.rek+=s;
-            else if(OZ_GRP_KOMP.has(g)) o.komp+=s;
-            else o.log+=s;                       /* доставка/партнёры/FBO/штрафы */
+            if(OZ_GRP_REK.has(g)){ o.rek+=s; buck='Реклама (по группе)'; }
+            else if(OZ_GRP_KOMP.has(g)){ o.komp+=s; buck='Компенсации (по группе)'; }
+            else { o.log+=s; buck='Логистика (по группе)'; }   /* доставка/партнёры/FBO/штрафы */
             ozUnk[typ]=(ozUnk[typ]||0)+s;
         }
+        /* ── агрегат для построчного просмотра начислений Ozon ── */
+        {const g=String(r[c_grp]||'').trim();
+         const lk=d.getFullYear()+'|'+(d.getMonth()+1)+'|'+g+'|'+typ;
+         const L=ozL[lk]||(ozL[lk]={y:d.getFullYear(),m:d.getMonth()+1,grp:g,typ,buck,sum:0,n:0,qty:0});
+         L.sum+=s; L.n++; L.qty+=qty;}
     });
+
+    /* Наружу — для вкладки «начисления Ozon построчно». Сортируем по модулю суммы:
+       сверху то, что весит больше всего. На расчёты P&L не влияет. */
+    M.ozLines=Object.values(ozL).sort((a,b)=>Math.abs(b.sum)-Math.abs(a.sum));
 
     const rsFor=o=>{
         let v=ekonRS[lnk(o.code)];
@@ -1324,7 +1337,10 @@ async function buildModel(textsOverride){
   M.co={
     EF:  {ob:obEF, acr:acForCo(acGroup), postR:postEF},
     EZFR:{ob:obEZ, acr:[],               postR:[]},
-    OZON:{ob:obOZ, acr:[],               postR:[]},
+    /* ozLines едет ВНУТРИ co.OZON: этот объект загрузчик присваивает целиком,
+       поэтому поле доедет до фронта независимо от того, копирует ли ui.js
+       незнакомые ключи верхнего уровня (на этом уже терялось ordMs). */
+    OZON:{ob:obOZ, acr:[],               postR:[], ozLines:(M.ozLines||[])},
     CONS:{ob:obEF.concat(obEZ).concat(obOZ), acr:acForCo(acGroup), postR:postEF},
   };
   applyCompany();

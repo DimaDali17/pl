@@ -397,7 +397,9 @@ async function runModel(texts) {
   await vm.runInContext('buildModel(__texts)', ctx);
   /* ВАЖНО: в config.js `M` объявлена через let → это лексическая переменная контекста,
      а НЕ свойство sandbox-объекта. ctx.M будет undefined. Достаём выражением. */
-  return vm.runInContext('({co:M.co, artByPaG:M.artByPaG, diag:M.diag})', ctx);
+  /* ВНИМАНИЕ: любое новое поле модели надо добавлять И СЮДА, И в payload ниже —
+     иначе оно молча не доедет до фронта (так уже терялось поле ordMs). */
+  return vm.runInContext('({co:M.co, artByPaG:M.artByPaG, diag:M.diag, ozLines:(typeof M.ozLines!==\'undefined\'?M.ozLines:[])})', ctx);
 }
 
 /* ═══════════ ДИАГНОСТИКА ДОСТУПА К DRIVE ═══════════ */
@@ -547,6 +549,7 @@ const out = {
   co: { EF: M.co.EF, EZFR: M.co.EZFR, OZON: M.co.OZON },
   artByPaG: M.artByPaG,
   diag: M.diag,
+  ozLines: M.ozLines || [],     /* начисления Ozon построчно (тип×группа×месяц) */
 };
 const payload = JSON.stringify(out);
 

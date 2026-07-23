@@ -195,6 +195,7 @@ function render(){
   rows.forEach(r=>h+=rowHtml(r,false)); h+=rowHtml(tot,true); h+='</tbody>';
   document.getElementById('matrix').innerHTML=h;
   if(typeof enableSort==='function')enableSort(document.getElementById('matrix').parentNode||document);
+  renderOzLines();   /* построчные начисления Ozon под таблицей P&L */
 
   /* KPI — сравнение YTD (янв → последний полный месяц) */
   const nowY=new Date().getFullYear(),nowM=new Date().getMonth()+1;
@@ -218,4 +219,60 @@ function render(){
   const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus)?' · + колонки без баллов':'';
   document.getElementById('matrixSub').textContent=(ymLbl||(y?`год ${y}${msLbl}`:`за всё время${msLbl}`))+(q?' · '+q:'')+ordLbl+ozLbl;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
+}
+
+/* ═══════════ НАЧИСЛЕНИЯ OZON ПОСТРОЧНО ═══════════
+   Показываем, за что именно Ozon списал: тип начисления и группа услуг — как их
+   отдаёт сам Ozon, — плюс колонка «куда учтено» (в какую статью P&L строка легла).
+   Ничего не пересчитывает: это просмотр исходных начислений.
+   Виден только для Ozon и Консолидации, под основной таблицей P&L. */
+function ozLinesData(){
+  return (M.co&&M.co.OZON&&M.co.OZON.ozLines)||M.ozLines||[];
+}
+function ensureOzBox(){
+  let b=document.getElementById('ozBox'); if(b)return b;
+  const mx=document.getElementById('matrix'); if(!mx)return null;
+  const host=(mx.closest&&mx.closest('.sec'))||mx.parentNode; if(!host||!host.parentNode)return null;
+  b=document.createElement('div'); b.id='ozBox';
+  host.parentNode.insertBefore(b,host.nextSibling);
+  return b;
+}
+function renderOzLines(){
+  const box=ensureOzBox(); if(!box)return;
+  if(curCo!=='OZON'&&curCo!=='CONS'){ box.innerHTML=''; return; }
+  const src=ozLinesData();
+  if(!src.length){ box.innerHTML=''; return; }
+
+  const y=+document.getElementById('fYear').value;
+  const mset=selMonths.size?selMonths:new Set([1,2,3,4,5,6,7,8,9,10,11,12]);
+  const rows=src.filter(L=>(!y||L.y===y)&&mset.has(L.m));
+
+  /* сворачиваем месяцы: строка = группа + тип начисления */
+  const agg={};
+  rows.forEach(L=>{ const k=L.grp+'|'+L.typ;
+    const a=agg[k]||(agg[k]={grp:L.grp,typ:L.typ,buck:L.buck,sum:0,n:0,qty:0});
+    a.sum+=L.sum; a.n+=L.n; a.qty+=L.qty; });
+  const list=Object.values(agg).sort((a,b)=>Math.abs(b.sum)-Math.abs(a.sum));
+  if(!list.length){ box.innerHTML=''; return; }
+
+  const tot=list.reduce((s,a)=>s+a.sum,0);
+  const per=y?`год ${y}`:'за всё время';
+  const ms=(selMonths.size&&selMonths.size<12)?' · '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'';
+  /* «(по группе)» — тип не в справочнике типов, отнесён по группе услуг */
+  const bcls=b=>/группе/.test(b||'')?' style="opacity:.75"':'';
+  let h='<thead><tr><th>Группа услуг</th><th>Тип начисления</th><th title="в какую статью P&L попала строка">Куда учтено</th>'
+    +'<th title="сколько строк в отчёте Ozon">Строк</th><th>Кол-во</th><th>Сумма, ₽</th><th>% от итога</th></tr></thead><tbody>';
+  list.forEach(a=>{
+    h+=`<tr><td>${a.grp||'—'}</td><td title="${a.typ}">${a.typ||'—'}</td>`
+      +`<td${bcls(a.buck)}>${a.buck||'—'}</td>`
+      +`<td>${fi(a.n)}</td><td>${a.qty?fi(a.qty):'—'}</td>`
+      +`<td class="${a.sum<0?'neg':'pos'}">${fi(a.sum)}</td>`
+      +`<td class="hl">${tot?((Math.abs(a.sum)/Math.abs(tot))*100).toFixed(1).replace('.',',')+'%':'—'}</td></tr>`;
+  });
+  h+=`<tr class="total"><td>Всего</td><td></td><td></td><td>${fi(list.reduce((s,a)=>s+a.n,0))}</td><td></td>`
+    +`<td>${fi(tot)}</td><td class="hl">100%</td></tr></tbody>`;
+  box.innerHTML=section('Начисления Ozon построчно · '+per+ms,
+    'как их отдаёт Ozon: тип начисления и группа услуг · колонка «куда учтено» — в какую статью P&L строка попала · '
+    +'приписка «(по группе)» = типа нет в списке, отнесён по группе услуг',h);
+  if(typeof enableSort==='function')enableSort(box);
 }
