@@ -119,7 +119,7 @@ function fixNavLabels(){
 
 function render(){
   if(!M.loaded)return;
-  ensureNbStyle(); ensureOzBtn(); ensureOrdBtn(); ensureAllBtn(); ensureUnitTab(); fixNavLabels();
+  ensureNbStyle(); ensureOzBtn(); ensureOrdBtn(); ensureAllBtn(); ensureUnitTab(); ensureRevTab(); fixNavLabels();
   if(curTab!=='pl'){renderTab();return;}
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();

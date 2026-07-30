@@ -9,8 +9,8 @@ function switchCo(c){
   if(curTab==='pl')render(); else renderTab();
 }
 function tab(p){ curTab=p; document.querySelectorAll('#tabs .tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
-  ensureUnitTab();
-  ['pl','unit','profit','adv','log','fix','check','razbor','komwb','insights'].forEach(x=>{
+  ensureUnitTab(); ensureRevTab();
+  ['pl','unit','rev','profit','adv','log','fix','check','razbor','komwb','insights'].forEach(x=>{
     const pg=document.getElementById('page-'+x); if(pg)pg.style.display=(x===p?'block':'none'); });
   document.getElementById('grpWrap').style.display=p==='pl'?'flex':'none';
   document.getElementById('pyWrap').style.display=p==='pl'?'flex':'none';
@@ -141,7 +141,7 @@ function scopeSeries(fn){
 }
 const scopeTtl=y=>chartScope==='year'?'по годам · вся история':chartScope==='ym'?'по месяцам · вся история':`по месяцам · ${y}`;
 function renderTab(){
-  ensureUnitTab();
+  ensureUnitTab(); ensureRevTab();
   const y=+document.getElementById('fYear').value;
   const q=document.getElementById('fSearch').value.trim().toLowerCase();
   const el=document.getElementById('page-'+curTab);
@@ -218,6 +218,8 @@ function renderTab(){
     tabTables(el,chart,'Средний чек','Ср.Чек Заказа = Заказ,руб ÷ Заказ,шт',cols,y,q,sM);
   } else if(curTab==='unit'){
     renderUnit(el,y,q,sM);
+  } else if(curTab==='rev'){
+    renderRevenue(el,y,q,sM);
   } else if(curTab==='razbor'){
     renderRazbor(el,y,q,sM);
   } else if(curTab==='komwb'){
@@ -433,4 +435,65 @@ function enableSort(root){
       });
     });
   });
+}
+
+/* ═══════════ ВКЛАДКА «ВЫРУЧКА» — заказы и выкупы, динамика за всё время ═══════════
+   Только объёмные показатели: штуки, рубли, выкупаемость, средний чек. Расходов и
+   прибыли здесь нет — для них вкладки P&L / Прибыль. График с переключателем
+   Месяцы · Мес×Год · Годы, ниже — таблицы по месяцам / предметам / артикулам. */
+function revCols(y){
+  return [
+    {l:'Заказ,шт',   t:'Заказано штук',                          fn:(m,f)=>fi(meas(y,m,f).zaks)},
+    {l:'Выкуп,шт',   t:'Выкуплено штук',                         fn:(m,f)=>fi(meas(y,m,f).vyks)},
+    {l:'Выкуп %',    t:'Выкупаемость = Выкуп,шт ÷ Заказ,шт',      fn:(m,f)=>fp(meas(y,m,f).vkp)},
+    {l:'Заказ,руб',  t:'Сумма заказов',                          fn:(m,f)=>fi(meas(y,m,f).zakr)},
+    {l:'Выкуп,руб',  t:'Выручка (выкуп) в рублях',               fn:(m,f)=>fi(meas(y,m,f).vykr)},
+    {l:'Ср.Чек',     t:'Средний чек = Выкуп,руб ÷ Выкуп,шт',      fn:(m,f)=>fi(meas(y,m,f).cena)},
+  ];
+}
+function renderRevenue(el,y,q,sM){
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
+  /* два графика: рубли (выкуп) и штуки (заказ vs выкуп) — каждый со своим масштабом */
+  const zakR=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).zakr);
+  const vykR=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).vykr);
+  const zakS=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).zaks);
+  const vykS=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).vyks);
+  const vkpS=scopeSeries((yy,mm)=>meas(yy,mm,searchOK).vkp);
+  const mlnF=v=>v?(v/1e6).toFixed(1).replace('.',','):'';
+
+  const chartRub=chartCard(`Заказы и выкупы, ₽ · ${scopeTtl(y)}`,
+    legItem('#9DB8A4','Заказ, млн ₽',.7)+legItem('var(--green)','Выкуп, млн ₽',.85),
+    chartGrouped(scopeAxis(),zakR,vykR,mlnF,'млн ₽'));
+  const chartSht=chartCard(`Заказы и выкупы, шт + выкупаемость · ${scopeTtl(y)}`,
+    legItem('#9DB8A4','Заказ, шт',.7)+legItem('var(--blue)','Выкуп %'),
+    chartBL(scopeAxis(),zakS,vkpS,{barColor:'#9DB8A4',lineColor:'var(--blue)',
+      lineFmt:v=>(v*100).toFixed(0)+'%',barFmt:kf,leftTitle:'шт',rightTitle:'Выкуп %',lineMax:1}));
+
+  const K=meas(y,sM,searchOK);
+  const per=y?`год ${y}`:'за всё время';
+  const sub=K.vyks
+    ? `${per} · заказано ${fi(K.zaks)} шт · выкуплено ${fi(K.vyks)} шт · выкупаемость ${fp(K.vkp)} · `
+      +`выручка ${fi(K.vykr)} ₽ · средний чек ${fi(K.cena)} ₽`
+    : `${per} · за период нет выкупов`;
+  tabTables(el,chartRub+chartSht,'Выручка',sub,revCols(y),y,q,sM);
+}
+function ensureRevTab(){
+  const tabsBox=document.getElementById('tabs');
+  if(tabsBox&&!tabsBox.querySelector('[data-p="rev"]')){
+    const proto=tabsBox.querySelector('.tab');
+    if(proto){
+      const b=document.createElement(proto.tagName);
+      b.className=proto.className.replace(/\bon\b/,'').trim();
+      b.dataset.p='rev'; b.textContent='Выручка';
+      b.title='Заказы и выкупы: штуки, рубли, выкупаемость, средний чек — за всё время с выбором периода';
+      b.onclick=()=>tab('rev');
+      const anchor=tabsBox.querySelector('[data-p="unit"]')||tabsBox.querySelector('[data-p="pl"]');
+      if(anchor&&anchor.nextSibling)tabsBox.insertBefore(b,anchor.nextSibling); else tabsBox.appendChild(b);
+    }
+  }
+  if(!document.getElementById('page-rev')){
+    const pl=document.getElementById('page-pl');
+    if(pl&&pl.parentNode){ const d=document.createElement('div'); d.id='page-rev'; d.style.display='none';
+      pl.parentNode.insertBefore(d,pl.nextSibling); }
+  }
 }
