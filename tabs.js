@@ -469,10 +469,14 @@ function renderRevenue(el,y,q,sM){
     chartBL(scopeAxis(),zakS,vkpS,{barColor:'#9DB8A4',lineColor:'var(--blue)',
       lineFmt:v=>(v*100).toFixed(0)+'%',barFmt:kf,leftTitle:'шт',rightTitle:'Выкуп %',lineMax:1}));
 
-  const revSub=K.vyks
-    ? `${per} · заказано ${fi(K.zaks)} шт · выкуплено ${fi(K.vyks)} шт · выкупаемость ${fp(K.vkp)} · `
-      +`выручка ${fi(K.vykr)} ₽ · средний чек ${fi(K.cena)} ₽`
-    : `${per} · за период нет выкупов`;
+  const revSub=(()=>{
+    const K=meas(y,sM,searchOK);
+    const per=y?`год ${y}`:'за всё время';
+    return K.vyks
+      ? `${per} · заказано ${fi(K.zaks)} шт · выкуплено ${fi(K.vyks)} шт · выкупаемость ${fp(K.vkp)} · `
+        +`выручка ${fi(K.vykr)} ₽ · средний чек ${fi(K.cena)} ₽`
+      : `${per} · за период нет выкупов`;
+  })();
   const per2=sM&&sM.length<12?' · '+MONTHS[sM[0]-1]:'';
   const artNote=sizeAggOf()?'▸ разверни артикул, чтобы увидеть размеры':'артикулы <100 заказов → «Прочее»';
   el.innerHTML=(chartRub+chartSht)
