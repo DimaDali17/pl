@@ -547,15 +547,15 @@ function revBreakdownSized(cols,y,q,months){
       /* суммируем ровно выбранный срез: год (или все годы) × выбранные месяцы */
       const yStr=y?String(y):null;
       szRows=Object.values(sizes).map(k=>{
-        let vyks=0,vykr=0,zaks=0;
+        let vyks=0,vykr=0;
         for(const mk in k.byM){                         /* mk = 'ГГГГ-ММ' */
           const yy=mk.slice(0,4), mm=+mk.slice(5);
           if(yStr&&yy!==yStr)continue;
           if(!mset.has(mm))continue;
-          const B=k.byM[mk]; vyks+=B.vyks; vykr+=B.vykr; zaks+=B.zaks;
+          const B=k.byM[mk]; vyks+=B.vyks; vykr+=B.vykr;
         }
-        return {sz:k.sz,vyks,vykr,zaks};
-      }).filter(r=>r.vyks||r.vykr||r.zaks).sort((a,b)=>b.vykr-a.vykr);
+        return {sz:k.sz,vyks,vykr};
+      }).filter(r=>r.vyks||r.vykr).sort((a,b)=>b.vykr-a.vykr);
     }
     const canExpand=szRows.length>0;
     const id='sz'+(uid++);
@@ -564,13 +564,10 @@ function revBreakdownSized(cols,y,q,months){
     h+=`<tr data-grp="${id}"><td title="${D}">${caret}${D}</td>`+cols.map(c=>`<td>${c.fn(mArr,r=>r.paG===D&&searchOK(r))}</td>`).join('')+'</tr>';
     if(canExpand){
       szRows.forEach(sr=>{
-        const cell=lbl=>{ if(lbl==='Заказ,шт')return fi(sr.zaks);
-          if(lbl==='Выкуп,шт')return fi(sr.vyks);
-          if(lbl==='Выкуп %')return sr.zaks?fp(sr.vyks/sr.zaks):'—';
+        const cell=lbl=>{ if(lbl==='Выкуп,шт')return fi(sr.vyks);
           if(lbl==='Выкуп,руб')return fi(sr.vykr);
           if(lbl==='Ср.Чек')return sr.vyks?fi(sr.vykr/sr.vyks):'—';
-          if(lbl==='Заказ,руб')return '—';
-          return '—'; };
+          return '—'; };   /* Заказ,шт / Заказ,руб / Выкуп % по размеру — в данных нет */
         h+=`<tr class="szrow ${id}" data-parent="${id}" style="display:none"><td style="padding-left:26px;color:var(--ink2)">${sr.sz}</td>`
           +cols.map(c=>`<td>${cell(c.l)}</td>`).join('')+'</tr>';
       });
