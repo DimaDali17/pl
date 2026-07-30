@@ -760,10 +760,20 @@ async function buildModel(textsOverride){
     if(!rr||!rr.length)return[];
     const H=rr._headers;
     const c_art=col(H,'Артикул поставщика',"Supplier's Article");
-    /* Размер/баркод — для разреза выручки по размерам. Точный поиск: нестрогий col()
-       мог бы схватить «Размер комиссии…» и т.п. */
-    const c_size=(H&&(H.indexOf('Размер')>-1?'Размер':H.indexOf('Size')>-1?'Size':undefined));
-    const c_bar =(H&&(H.indexOf('Баркод')>-1?'Баркод':H.indexOf('Barcode')>-1?'Barcode':H.indexOf('Штрихкод')>-1?'Штрихкод':undefined));
+    /* Размер/баркод — для разреза выручки по размерам. Ищем устойчиво: точное имя,
+       затем без учёта регистра/пробелов, но НЕ хватаем «Размер комиссии…». */
+    const findCol=(cands,bad)=>{
+      if(!H)return undefined;
+      for(const c of cands){ if(H.indexOf(c)>-1)return c; }        /* точное совпадение */
+      const norm=x=>String(x).toLowerCase().replace(/\s+/g,' ').trim();
+      const want=cands.map(norm);
+      for(const h of H){ const nh=norm(h);
+        if(bad&&bad.test(nh))continue;
+        if(want.includes(nh))return h; }
+      return undefined;
+    };
+    const c_size=findCol(['Размер','Size','размер'], /комисс|коэфф|%/);
+    const c_bar =findCol(['Баркод','Barcode','Штрихкод','штрихкод','баркод']);
     const c_pred=col(H,'Предмет','Subject');
     const c_reason=col(H,'Обоснование для оплаты','Reason for Payment');
     const c_doctype=col(H,'Тип документа','Document Type');
@@ -1144,10 +1154,11 @@ async function buildModel(textsOverride){
        Массив это объект, поле переживёт .concat при сборке CONS. */
     out.sizeAgg=sizeAgg;
     diag.push({name:'Размеры: покрытие',status:c_size?'ok':'warn',rows:Object.keys(sizeAgg).length,
-      msg:c_size
+      msg:(c_size
         ?`колонка «${c_size}» найдена · артикулов с размерами: ${Object.keys(sizeAgg).length}`
-          +(Object.keys(sizeAgg).length?` · пример: ${(()=>{const k=Object.keys(sizeAgg)[0];return k+' → '+Object.keys(sizeAgg[k]).slice(0,6).join(', ');})()}`:'')
-        :'⚠ колонки «Размер»/«Size» в финотчёте нет — разрез по размерам недоступен'});
+          +(Object.keys(sizeAgg).length?` · пример: ${(()=>{const k=Object.keys(sizeAgg)[0];return k+' → '+Object.keys(sizeAgg[k]).slice(0,6).join(', ');})()}`:' · но ни одной строки не набралось')
+        :'⚠ колонки «Размер»/«Size» в финотчёте нет — разрез по размерам недоступен')
+        +` ║ заголовки отчёта со словом размер/size: ${(H||[]).filter(h=>/размер|size|баркод|barcode|штрихкод/i.test(String(h))).slice(0,12).join(' · ')||'—'}`});
     return out;
   }
 
