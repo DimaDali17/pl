@@ -397,21 +397,33 @@ function sortTable(tb,ci,dir){
   const body=tb.tBodies[0]; if(!body)return;
   const rows=[...body.rows];
   const totals=rows.filter(r=>r.classList.contains('total'));   /* итоги — всегда вниз */
-  const data=rows.filter(r=>!r.classList.contains('total'));
-  const nums=data.map(r=>sortVal(r.cells[ci]));
-  const isNum=nums.some(v=>v!==null);
-  data.sort((a,b)=>{
-    if(isNum){
-      const x=sortVal(a.cells[ci]), y=sortVal(b.cells[ci]);
-      if(x===null&&y===null)return 0;
-      if(x===null)return 1; if(y===null)return -1;   /* пустые всегда в конец */
-      return dir==='asc'?x-y:y-x;
+  const rest=rows.filter(r=>!r.classList.contains('total'));
+  const cmp=(a,b)=>{
+    const xn=sortVal(a.cells[ci]), yn=sortVal(b.cells[ci]);
+    if(xn!==null||yn!==null){                       /* числовое сравнение */
+      if(xn===null)return 1; if(yn===null)return -1;
+      return dir==='asc'?xn-yn:yn-xn;
     }
-    const x=(a.cells[ci]?a.cells[ci].textContent:'').trim(),
-          y=(b.cells[ci]?b.cells[ci].textContent:'').trim();
-    return dir==='asc'?x.localeCompare(y,'ru'):y.localeCompare(x,'ru');
-  });
-  data.forEach(r=>body.appendChild(r));
+    const xs=(a.cells[ci]?a.cells[ci].textContent:'').trim(),
+          ys=(b.cells[ci]?b.cells[ci].textContent:'').trim();
+    return dir==='asc'?xs.localeCompare(ys,'ru'):ys.localeCompare(xs,'ru');
+  };
+  /* Иерархия «артикул → размеры»: подстроки (data-parent) сортируем ВНУТРИ
+     родителя и держим сразу под ним. Если иерархии нет — обычная сортировка. */
+  const hasTree=rest.some(r=>r.dataset.parent);
+  if(hasTree){
+    const parents=rest.filter(r=>!r.dataset.parent);
+    const kids={}; rest.forEach(r=>{ if(r.dataset.parent)(kids[r.dataset.parent]||(kids[r.dataset.parent]=[])).push(r); });
+    parents.sort(cmp);
+    parents.forEach(p=>{
+      body.appendChild(p);
+      const g=p.dataset.grp; const ch=g&&kids[g];
+      if(ch){ ch.sort(cmp); ch.forEach(c=>body.appendChild(c)); }
+    });
+  } else {
+    rest.sort(cmp);
+    rest.forEach(r=>body.appendChild(r));
+  }
   totals.forEach(r=>body.appendChild(r));
 }
 function enableSort(root){
@@ -523,25 +535,33 @@ function revBreakdownSized(cols,y,q,months){
   const dims=Object.keys(acc).sort((a,b)=>acc[b]-acc[a]);
   const mArr=[...mset];
   const SA=sizeAggOf();
+  const anySize=dims.some(D=>SA&&SA[D]&&Object.keys(SA[D]).length);
   let uid=0;
-  let h=`<thead><tr><th>Артикул</th>`+cols.map(c=>`<th title="${c.t||c.l}">${c.l}</th>`).join('')+'</tr></thead><tbody>';
+  /* кнопка «развернуть/свернуть все» в шапке первой колонки */
+  const allBtn=anySize?`<span id="szAllBtn" onclick="toggleAllSizes(this)" style="cursor:pointer;user-select:none;font-weight:400;color:var(--ink3)" title="развернуть все размеры">⧉ все</span> `:'';
+  let h=`<thead><tr><th>${allBtn}Артикул</th>`+cols.map(c=>`<th title="${c.t||c.l}">${c.l}</th>`).join('')+'</tr></thead><tbody>';
   dims.forEach(D=>{
     const sizes=SA&&SA[D];
-    /* размеры за выбранный период: суммируем byY по годам среза (или все, если год не задан) */
     let szRows=[];
     if(sizes){
+      /* суммируем ровно выбранный срез: год (или все годы) × выбранные месяцы */
+      const yStr=y?String(y):null;
       szRows=Object.values(sizes).map(k=>{
         let vyks=0,vykr=0,zaks=0;
-        if(!y){ vyks=k.vyks; vykr=k.vykr; zaks=k.zaks; }
-        else { const Y=k.byY[y]; if(Y){vyks=Y.vyks;vykr=Y.vykr;zaks=Y.zaks;} }
+        for(const mk in k.byM){                         /* mk = 'ГГГГ-ММ' */
+          const yy=mk.slice(0,4), mm=+mk.slice(5);
+          if(yStr&&yy!==yStr)continue;
+          if(!mset.has(mm))continue;
+          const B=k.byM[mk]; vyks+=B.vyks; vykr+=B.vykr; zaks+=B.zaks;
+        }
         return {sz:k.sz,vyks,vykr,zaks};
       }).filter(r=>r.vyks||r.vykr||r.zaks).sort((a,b)=>b.vykr-a.vykr);
     }
     const canExpand=szRows.length>0;
     const id='sz'+(uid++);
     const caret=canExpand?`<span class="szcar" onclick="toggleSize('${id}',this)" style="cursor:pointer;user-select:none;color:var(--ink3)">▸ </span>`:'';
-    h+=`<tr><td title="${D}">${caret}${D}</td>`+cols.map(c=>`<td>${c.fn(mArr,r=>r.paG===D&&searchOK(r))}</td>`).join('')+'</tr>';
-    /* подстроки размеров — считаем прямо из szRows, чтобы не тянуть meas по каждому размеру */
+    /* data-grp: своя группа; строки размеров носят data-parent=id и держатся под артикулом */
+    h+=`<tr data-grp="${id}"><td title="${D}">${caret}${D}</td>`+cols.map(c=>`<td>${c.fn(mArr,r=>r.paG===D&&searchOK(r))}</td>`).join('')+'</tr>';
     if(canExpand){
       szRows.forEach(sr=>{
         const cell=lbl=>{ if(lbl==='Заказ,шт')return fi(sr.zaks);
@@ -549,15 +569,23 @@ function revBreakdownSized(cols,y,q,months){
           if(lbl==='Выкуп %')return sr.zaks?fp(sr.vyks/sr.zaks):'—';
           if(lbl==='Выкуп,руб')return fi(sr.vykr);
           if(lbl==='Ср.Чек')return sr.vyks?fi(sr.vykr/sr.vyks):'—';
-          if(lbl==='Заказ,руб')return '—';   /* суммы заказа по размеру в отчёте нет */
+          if(lbl==='Заказ,руб')return '—';
           return '—'; };
-        h+=`<tr class="szrow ${id}" style="display:none"><td style="padding-left:26px;color:var(--ink2)">${sr.sz}</td>`
+        h+=`<tr class="szrow ${id}" data-parent="${id}" style="display:none"><td style="padding-left:26px;color:var(--ink2)">${sr.sz}</td>`
           +cols.map(c=>`<td>${cell(c.l)}</td>`).join('')+'</tr>';
       });
     }
   });
   h+=`<tr class="total"><td>Всего</td>`+cols.map(c=>`<td>${c.fn(mArr,searchOK)}</td>`).join('')+'</tr></tbody>';
   return h;
+}
+/* развернуть/свернуть все размеры разом */
+function toggleAllSizes(el){
+  const tb=el.closest('table'); if(!tb)return;
+  const open=el.textContent.indexOf('свернуть')<0;
+  tb.querySelectorAll('tr.szrow').forEach(tr=>tr.style.display=open?'':'none');
+  tb.querySelectorAll('.szcar').forEach(c=>c.textContent=open?'▾ ':'▸ ');
+  el.textContent=open?'⧉ свернуть':'⧉ все';
 }
 function toggleSize(id,el){
   const open=el.textContent.trim().startsWith('▾');

@@ -912,15 +912,15 @@ async function buildModel(textsOverride){
         o.vykrGross += sg*retail;
         o.kPerech   += sg*pay;
         /* ── РАЗРЕЗ ПО РАЗМЕРАМ (только выручка/выкупы/заказы, на расчёты не влияет) ──
-           Ключ — тот же артикул paG, внутри него размер как в отчёте. Год копим,
-           чтобы фронт мог фильтровать по периоду. */
+           Ключ — тот же артикул paG, внутри него размер. Разбивку копим по МЕСЯЦАМ
+           (byM: 'ГГГГ-ММ'), чтобы фронт суммировал ровно выбранный срез месяцев;
+           годовой/общий итог фронт получает сложением нужных месяцев. */
         if(c_size){ const sz=String(r[c_size]||'').trim()||'—';
           const A=sizeAgg[paG]||(sizeAgg[paG]={});
-          const K2=A[sz]||(A[sz]={sz,vyks:0,vykr:0,zaks:0,byY:{}});
-          K2.vyks+=sg*qty; K2.vykr+=sg*retail; if(isSale)K2.zaks+=qty;
-          const yy=d.getFullYear();
-          const Y=K2.byY[yy]||(K2.byY[yy]={vyks:0,vykr:0,zaks:0});
-          Y.vyks+=sg*qty; Y.vykr+=sg*retail; if(isSale)Y.zaks+=qty; }
+          const K2=A[sz]||(A[sz]={sz,byM:{}});
+          const mk=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+          const B=K2.byM[mk]||(K2.byM[mk]={vyks:0,vykr:0,zaks:0});
+          B.vyks+=sg*qty; B.vykr+=sg*retail; if(isSale)B.zaks+=qty; }
         /* компоненты комиссии: ВВ + НДС ВВ + эквайринг + ПВЗ ≡ vykrGross − kPerech */
         o.rozn      += sg*num(r[c_rozn])*qty;
         {const _y=d.getFullYear();
