@@ -760,6 +760,10 @@ async function buildModel(textsOverride){
     if(!rr||!rr.length)return[];
     const H=rr._headers;
     const c_art=col(H,'Артикул поставщика',"Supplier's Article");
+    /* Размер/баркод — для разреза выручки по размерам. Точный поиск: нестрогий col()
+       мог бы схватить «Размер комиссии…» и т.п. */
+    const c_size=(H&&(H.indexOf('Размер')>-1?'Размер':H.indexOf('Size')>-1?'Size':undefined));
+    const c_bar =(H&&(H.indexOf('Баркод')>-1?'Баркод':H.indexOf('Barcode')>-1?'Barcode':H.indexOf('Штрихкод')>-1?'Штрихкод':undefined));
     const c_pred=col(H,'Предмет','Subject');
     const c_reason=col(H,'Обоснование для оплаты','Reason for Payment');
     const c_doctype=col(H,'Тип документа','Document Type');
@@ -838,7 +842,8 @@ async function buildModel(textsOverride){
     /* Контроль «Розничной»: копим ДВА варианта — с ×Кол-во и без, чтобы понять,
        задваивает ли умножение (старый бэкап) или цена честно за единицу. */
     const roznChk={};
-    let hranSpread=0,hranLeft=0;   /* сколько хранения разнесено по артикулам / осталось строкой */
+    let hranSpread=0,hranLeft=0;
+    const sizeAgg={};   /* paG → размер → {vyks,vykr,zaks} · параллельный разрез, на расчёты не влияет */   /* сколько хранения разнесено по артикулам / осталось строкой */
 
     const map={};
     const totals={}; /* хранение и удержания без артикула — по месяцам */
@@ -896,6 +901,16 @@ async function buildModel(textsOverride){
         o.vyks      += sg*qty;
         o.vykrGross += sg*retail;
         o.kPerech   += sg*pay;
+        /* ── РАЗРЕЗ ПО РАЗМЕРАМ (только выручка/выкупы/заказы, на расчёты не влияет) ──
+           Ключ — тот же артикул paG, внутри него размер как в отчёте. Год копим,
+           чтобы фронт мог фильтровать по периоду. */
+        if(c_size){ const sz=String(r[c_size]||'').trim()||'—';
+          const A=sizeAgg[paG]||(sizeAgg[paG]={});
+          const K2=A[sz]||(A[sz]={sz,vyks:0,vykr:0,zaks:0,byY:{}});
+          K2.vyks+=sg*qty; K2.vykr+=sg*retail; if(isSale)K2.zaks+=qty;
+          const yy=d.getFullYear();
+          const Y=K2.byY[yy]||(K2.byY[yy]={vyks:0,vykr:0,zaks:0});
+          Y.vyks+=sg*qty; Y.vykr+=sg*retail; if(isSale)Y.zaks+=qty; }
         /* компоненты комиссии: ВВ + НДС ВВ + эквайринг + ПВЗ ≡ vykrGross − kPerech */
         o.rozn      += sg*num(r[c_rozn])*qty;
         {const _y=d.getFullYear();
@@ -1125,6 +1140,14 @@ async function buildModel(textsOverride){
       if(t.rek)  out.push({paG:'(Удержания WB)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.rek),rekWB:Math.round(t.rek),post:0,nalog:0,hran:0,dost:0,perem:0});
       if(t.shtraf) out.push({paG:'(Штрафы)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.shtraf),post:0,nalog:0,hran:0,dost:0,perem:0});
     }
+    /* Разрез по размерам едет свойством массива out → далее в co.<K>.ob.
+       Массив это объект, поле переживёт .concat при сборке CONS. */
+    out.sizeAgg=sizeAgg;
+    diag.push({name:'Размеры: покрытие',status:c_size?'ok':'warn',rows:Object.keys(sizeAgg).length,
+      msg:c_size
+        ?`колонка «${c_size}» найдена · артикулов с размерами: ${Object.keys(sizeAgg).length}`
+          +(Object.keys(sizeAgg).length?` · пример: ${(()=>{const k=Object.keys(sizeAgg)[0];return k+' → '+Object.keys(sizeAgg[k]).slice(0,6).join(', ');})()}`:'')
+        :'⚠ колонки «Размер»/«Size» в финотчёте нет — разрез по размерам недоступен'});
     return out;
   }
 
@@ -1335,13 +1358,13 @@ async function buildModel(textsOverride){
      привязаны к артикулу. Лист «Пост» давал строки без предмета и задваивал суммы. */
   const postEF=[];
   M.co={
-    EF:  {ob:obEF, acr:acForCo(acGroup), postR:postEF},
-    EZFR:{ob:obEZ, acr:[],               postR:[]},
+    EF:  {ob:obEF, acr:acForCo(acGroup), postR:postEF, sizeAgg:(obEF.sizeAgg||{})},
+    EZFR:{ob:obEZ, acr:[],               postR:[], sizeAgg:(obEZ.sizeAgg||{})},
     /* ozLines едет ВНУТРИ co.OZON: этот объект загрузчик присваивает целиком,
        поэтому поле доедет до фронта независимо от того, копирует ли ui.js
        незнакомые ключи верхнего уровня (на этом уже терялось ordMs). */
     OZON:{ob:obOZ, acr:[],               postR:[], ozLines:(M.ozLines||[])},
-    CONS:{ob:obEF.concat(obEZ).concat(obOZ), acr:acForCo(acGroup), postR:postEF},
+    CONS:{ob:obEF.concat(obEZ).concat(obOZ), acr:acForCo(acGroup), postR:postEF, sizeAgg:(obEF.sizeAgg||{})},
   };
   applyCompany();
   diag.push({name:'Компании',status:'ok',rows:0,msg:`EF: ${obEF.length} строк · EZFR: ${obEZ.length} · Ozon: ${obOZ.length}`});

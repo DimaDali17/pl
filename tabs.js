@@ -469,13 +469,17 @@ function renderRevenue(el,y,q,sM){
     chartBL(scopeAxis(),zakS,vkpS,{barColor:'#9DB8A4',lineColor:'var(--blue)',
       lineFmt:v=>(v*100).toFixed(0)+'%',barFmt:kf,leftTitle:'шт',rightTitle:'Выкуп %',lineMax:1}));
 
-  const K=meas(y,sM,searchOK);
-  const per=y?`год ${y}`:'за всё время';
-  const sub=K.vyks
+  const revSub=K.vyks
     ? `${per} · заказано ${fi(K.zaks)} шт · выкуплено ${fi(K.vyks)} шт · выкупаемость ${fp(K.vkp)} · `
       +`выручка ${fi(K.vykr)} ₽ · средний чек ${fi(K.cena)} ₽`
     : `${per} · за период нет выкупов`;
-  tabTables(el,chartRub+chartSht,'Выручка',sub,revCols(y),y,q,sM);
+  const per2=sM&&sM.length<12?' · '+MONTHS[sM[0]-1]:'';
+  const artNote=sizeAggOf()?'▸ разверни артикул, чтобы увидеть размеры':'артикулы <100 заказов → «Прочее»';
+  el.innerHTML=(chartRub+chartSht)
+    +section(`Выручка по месяцам · ${y}`,revSub,monthTable(revCols(y),y,q,sM))
+    +section(`Выручка по предметам · ${y}${per2}`,'',breakdownTable(revCols(y),y,q,'predmet',sM))
+    +section(`Выручка по артикулам · ${y}${per2}`,artNote,revBreakdownSized(revCols(y),y,q,sM));
+  if(typeof enableSort==='function')enableSort(el);
 }
 function ensureRevTab(){
   const tabsBox=document.getElementById('tabs');
@@ -496,4 +500,63 @@ function ensureRevTab(){
     if(pl&&pl.parentNode){ const d=document.createElement('div'); d.id='page-rev'; d.style.display='none';
       pl.parentNode.insertBefore(d,pl.nextSibling); }
   }
+}
+
+/* ═══════════ ВЫРУЧКА ПО АРТИКУЛАМ С РАСКРЫТИЕМ ПО РАЗМЕРАМ ═══════════
+   Строит ту же таблицу, что breakdownTable('artikul'), но каждый артикул можно
+   развернуть в размеры (данные из co.<K>.sizeAgg, собранного в parseWBFin).
+   Размеры есть только для WB-финотчёта; если данных нет — таблица обычная. */
+function sizeAggOf(){
+  const co=(typeof curCo!=='undefined'&&M.co&&M.co[curCo])?M.co[curCo]:null;
+  return (co&&co.sizeAgg)||null;
+}
+function revBreakdownSized(cols,y,q,months){
+  const searchOK=r=>!q||r.paG.toLowerCase().includes(q); searchOK.agg=true;
+  const mset=new Set(months||[1,2,3,4,5,6,7,8,9,10,11,12]);
+  const acc={},ord={};
+  for(const r of M.obshiy){ if((y&&r.y!==y)||!mset.has(r.m)||!searchOK(r))continue;
+    acc[r.paG]=(acc[r.paG]||0)+r.vykr; ord[r.paG]=(ord[r.paG]||0)+r.zaks; }
+  const dims=Object.keys(acc).sort((a,b)=>acc[b]-acc[a]);
+  const mArr=[...mset];
+  const SA=sizeAggOf();
+  let uid=0;
+  let h=`<thead><tr><th>Артикул</th>`+cols.map(c=>`<th title="${c.t||c.l}">${c.l}</th>`).join('')+'</tr></thead><tbody>';
+  dims.forEach(D=>{
+    const sizes=SA&&SA[D];
+    /* размеры за выбранный период: суммируем byY по годам среза (или все, если год не задан) */
+    let szRows=[];
+    if(sizes){
+      szRows=Object.values(sizes).map(k=>{
+        let vyks=0,vykr=0,zaks=0;
+        if(!y){ vyks=k.vyks; vykr=k.vykr; zaks=k.zaks; }
+        else { const Y=k.byY[y]; if(Y){vyks=Y.vyks;vykr=Y.vykr;zaks=Y.zaks;} }
+        return {sz:k.sz,vyks,vykr,zaks};
+      }).filter(r=>r.vyks||r.vykr||r.zaks).sort((a,b)=>b.vykr-a.vykr);
+    }
+    const canExpand=szRows.length>0;
+    const id='sz'+(uid++);
+    const caret=canExpand?`<span class="szcar" onclick="toggleSize('${id}',this)" style="cursor:pointer;user-select:none;color:var(--ink3)">▸ </span>`:'';
+    h+=`<tr><td title="${D}">${caret}${D}</td>`+cols.map(c=>`<td>${c.fn(mArr,r=>r.paG===D&&searchOK(r))}</td>`).join('')+'</tr>';
+    /* подстроки размеров — считаем прямо из szRows, чтобы не тянуть meas по каждому размеру */
+    if(canExpand){
+      szRows.forEach(sr=>{
+        const cell=lbl=>{ if(lbl==='Заказ,шт')return fi(sr.zaks);
+          if(lbl==='Выкуп,шт')return fi(sr.vyks);
+          if(lbl==='Выкуп %')return sr.zaks?fp(sr.vyks/sr.zaks):'—';
+          if(lbl==='Выкуп,руб')return fi(sr.vykr);
+          if(lbl==='Ср.Чек')return sr.vyks?fi(sr.vykr/sr.vyks):'—';
+          if(lbl==='Заказ,руб')return '—';   /* суммы заказа по размеру в отчёте нет */
+          return '—'; };
+        h+=`<tr class="szrow ${id}" style="display:none"><td style="padding-left:26px;color:var(--ink2)">${sr.sz}</td>`
+          +cols.map(c=>`<td>${cell(c.l)}</td>`).join('')+'</tr>';
+      });
+    }
+  });
+  h+=`<tr class="total"><td>Всего</td>`+cols.map(c=>`<td>${c.fn(mArr,searchOK)}</td>`).join('')+'</tr></tbody>';
+  return h;
+}
+function toggleSize(id,el){
+  const open=el.textContent.trim().startsWith('▾');
+  document.querySelectorAll('tr.'+id).forEach(tr=>tr.style.display=open?'none':'');
+  el.textContent=(open?'▸ ':'▾ ');
 }
