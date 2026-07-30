@@ -462,7 +462,7 @@ function renderRevenue(el,y,q,sM){
   const mlnF=v=>v?(v/1e6).toFixed(1).replace('.',','):'';
 
   const chartRub=chartCard(`Заказы и выкупы, ₽ · ${scopeTtl(y)}`,
-    legItem('#9DB8A4','Заказ, млн ₽',.7)+legItem('var(--green)','Выкуп, млн ₽',.85),
+    legItem('var(--green)','Заказ, млн ₽',.85)+legItem('#B7D9C4','Выкуп, млн ₽',.85),
     chartGrouped(scopeAxis(),zakR,vykR,mlnF,'млн ₽'));
   const chartSht=chartCard(`Заказы и выкупы, шт + выкупаемость · ${scopeTtl(y)}`,
     legItem('#9DB8A4','Заказ, шт',.7)+legItem('var(--blue)','Выкуп %'),
