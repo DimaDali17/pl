@@ -178,11 +178,9 @@ function render(){
     const val=v[c.k]; let inner=c.f(val);
     let cls=(c.hl?'hl ':'')+(isPY?'py ':'')+(c.nb?'nb ':'');
     if((c.k==='pribFact'||c.k==='nbPribFact')&&!isPY)cls+=val>0?'pos ':val<0?'neg ':'';
-    if(c.k==='rek'&&!isPY&&v.rekEst)cls+='est ';
     let bar='';
     if(c.bar&&!isPY){ const w=Math.abs(val)/mx[c.k]*100; const col=c.bar==='bl'?'bl':(val>=0?'g':'r'); bar=`<span class="bar ${col}" style="width:${w}%"></span>`; }
-    const tip=(c.k==='rek'&&v.rekEst)?' title="оценка: факт < 30 000 → подставлено 300 000"':'';
-    return `<td class="${cls.trim()}"${tip}>${bar}<span class="v">${inner}</span></td>`;
+    return `<td class="${cls.trim()}">${bar}<span class="v">${inner}</span></td>`;
   };
   const y2=+document.getElementById('fYear').value;
   const rowHtml=(r,isTot)=>{

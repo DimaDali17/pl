@@ -29,13 +29,6 @@ function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,
 function acrSum(y,mset,filt){ let s=0; for(const r of M.acruals){ if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue; if(filt&&!filt(r))continue; s+=r.acr; } return s; }
 function postRv(y,mArr,filt){ const a=agg(y,new Set(mArr),filt); if(a.post!==0)return a.post;
   if(mArr.length===1){const pm=prevMonth(y,mArr[0]);return agg(pm.y,new Set([pm.m]),filt).post;} return a.post; }
-/* правило рекламы применимо к месяцу: с апреля 2026 И только к ЗАВЕРШЁННОМУ месяцу */
-function ruleApplies(y,m){
-  const now=new Date(),nowY=now.getFullYear(),nowM=now.getMonth()+1;
-  const fromApr=(y>2026)||(y===2026&&m>=4);
-  const completed=(y<nowY)||(y===nowY&&m<nowM);
-  return fromApr&&completed;
-}
 /* ── Ozon: «Выручка+Баллы» и «без Баллов» ──
    ОСНОВНЫЕ колонки всегда считаются от базы Ozon: Выручка + Баллы + Партнёры
      (именно с неё берётся вознаграждение ~43%). ДРЛ%/ДРР% — тоже от неё.
@@ -60,13 +53,7 @@ const toggleOzReal=toggleNoBonus;   /* старое имя, на случай в
 function meas(y,mArr,filt){
   const isAgg=(filt==null)||filt.agg===true;
   const mset=new Set(mArr); const a=agg(y,mset,filt); const acr=acrSum(y,mset,filt); const pR=postRv(y,mArr,filt);
-  let rek=a.rek, rekEst=false;
-  if(isAgg && curCo!=='EZFR' && curCo!=='OZON'){
-    rek=0;
-    for(const m of mArr){ let r=agg(y,new Set([m]),filt).rek;
-      if(ruleApplies(y,m)&&r<30000){ r=300000; if(mArr.length===1)rekEst=true; }
-      rek+=r; }
-  }
+  const rek=a.rek;   /* реклама всегда фактическая (заглушка «<30к → 300к» удалена) */
   const vykr=a.vykr, kom=a.kom;
   /* komp — компенсации WB (брак/утеря/подмена) и компенсации/декомпенсации Ozon:
      это ДОХОД, прибавляется */
@@ -84,7 +71,7 @@ function meas(y,mArr,filt){
   return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr,cena:DIV(vykr,a.vyks),
     byOrder:!!byOrder,
     perem:a.perem,dost:a.dost,drl:DIV(a.dost,vykr),hran:a.hran,kom,komP:DIV(kom,vykr),nalog:a.nalog,
-    pribOper,pribOperP:DIV(pribOper,vykr),postAkr,rek,rekEst,drr:DIV(rek,drrBase),
+    pribOper,pribOperP:DIV(pribOper,vykr),postAkr,rek,drr:DIV(rek,drrBase),
     pribFact,pribFactP:DIV(pribFact,vykr),
     advCPO:DIV(rek,a.zaks),advCPS:DIV(rek,a.vyks),drrSa:DIV(rek,vykr),
     logCPS:DIV(a.dost,a.vyks),stockCPS:DIV(a.hran,a.vyks),dostP:DIV(a.dost,vykr),hranP:DIV(a.hran,vykr),
