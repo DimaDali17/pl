@@ -11,6 +11,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import fs from 'node:fs';
 import path from 'node:path';
+
 import vm from 'node:vm';
 import * as XLSX from 'xlsx';
 
@@ -402,6 +403,11 @@ async function runModel(texts) {
   }
   ctx.__texts = texts;
   await vm.runInContext('buildModel(__texts)', ctx);
+  /* Пик памяти: после buildModel сырые тексты (EF ~283 МБ + производные) больше
+     не нужны — освобождаем ссылки до извлечения результата и сериализации. */
+  ctx.__texts = null;
+  for (const k in texts) delete texts[k];
+  if (global.gc) { try { global.gc(); } catch {} }
   /* ВАЖНО: в config.js `M` объявлена через let → это лексическая переменная контекста,
      а НЕ свойство sandbox-объекта. ctx.M будет undefined. Достаём выражением. */
   /* ВНИМАНИЕ: любое новое поле модели надо добавлять И СЮДА, И в payload ниже —
