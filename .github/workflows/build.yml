@@ -42,5 +42,5 @@ jobs:
           WBFIN_EF:         ${{ vars.WBFIN_EF }}         # поставить "1" на приоритете 3
           WORKER_URL:       ${{ vars.WORKER_URL }}       # https://pl-proxy.xxx.workers.dev
           WRITE_TOKEN:      ${{ secrets.WRITE_TOKEN }}   # токен записи модели в KV
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=7168 --expose-gc   # финотчёт EF >1,4 млн строк (~283 МБ) не влезал в 6 ГБ → OOM. Раннер даёт ~16 ГБ RAM. --expose-gc: prebuild сам освобождает тексты после сборки
         run: node prebuild.mjs
