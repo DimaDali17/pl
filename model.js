@@ -1298,8 +1298,9 @@ async function buildModel(textsOverride){
                     важно, сколько перечислено против того, что заплатил клиент.
                     Тождество: Выкуп,руб − Ком.МП = перечислено (до логистики и рекламы).
                     Как и у WB в 2022–2023, комиссия может уйти в минус — это норма.
-       НАЛОГ      = с базы «Выручка + Баллы + Партнёры» (баллы — доход продавца),
-                    а НЕ с Выкуп,руб. В этом отличие Ozon от WB. */
+       НАЛОГ      = с базы «Выручка + Возврат выручки + Программы партнёров».
+                    Баллы за скидки в базу НЕ входят (в отличие от Выкуп,руб).
+                    Ставка: 7% до 01.02.2026, далее 12%. */
     const vals=Object.values(map);
     const T={sales:0,bonus:0,ret:0,partner:0,kom:0,komReal:0,vykr:0,tax:0}; const TY={};
     const out=vals.map(o=>{
@@ -1315,7 +1316,9 @@ async function buildModel(textsOverride){
         const comp=Math.round(o.bonusRub+o.partnerRub);
         const komNom=Math.round(-o.kom);                        /* вознаграждение Ozon */
         const kom=komNom;                                       /* комиссия = вознаграждение, без вычета баллов */
-        const taxBase=vykr;
+        /* База налога УСН = Выручка + Возврат выручки + Программы партнёров.
+           Баллы за скидки в базу НЕ входят (в отличие от vykr/Выкуп,руб). */
+        const taxBase=Math.round(o.salesRub+o.returnRub+o.partnerRub);
         const price=o.salesQty?vykr/o.salesQty:0;
         T.sales+=o.salesRub; T.bonus+=o.bonusRub; T.ret+=o.returnRub; T.partner+=o.partnerRub;
         T.kom+=komNom; T.komReal+=komNom-comp; T.vykr+=vykr; T.tax+=taxBase;
@@ -1345,9 +1348,9 @@ async function buildModel(textsOverride){
     diag.push({name:'Ozon: разбор выручки',status:'ok',rows:out.length,
       msg:`Выручка ${r0(T.sales)} · Баллы ${r0(T.bonus)} · Возврат ${r0(T.ret)} · Партнёры ${r0(T.partner)}`
         +` → Выкуп,руб (выручка+баллы) ${r0(T.vykr)} · деньги клиента ${r0(T.sales+T.ret)}`
-        +` · Ком.МП номинальная ${r0(T.kom)} (${T.tax?(T.kom/T.tax*100).toFixed(1):'—'}% от базы «выручка+баллы»)`
+        +` · Ком.МП номинальная ${r0(T.kom)} (${T.vykr?(T.kom/T.vykr*100).toFixed(1):'—'}% от базы «выручка+баллы»)`
         +` · если вычесть баллы: ${r0(T.komReal)} (справочно, в P&L НЕ используется)`
-        +` · база налога ${r0(T.tax)}`
+        +` · база налога (без баллов) ${r0(T.tax)}`
         });
     diag.push({name:'Ozon: по годам',status:'ok',rows:0,
       msg:Object.keys(TY).sort().map(y=>{const b=TY[y];
