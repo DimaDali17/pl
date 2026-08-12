@@ -217,6 +217,53 @@ function render(){
   const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus)?' · + колонки без баллов':'';
   document.getElementById('matrixSub').textContent=(ymLbl||(y?`год ${y}${msLbl}`:`за всё время${msLbl}`))+(q?' · '+q:'')+ordLbl+ozLbl;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
+
+  scheduleFit();                       /* вписать таблицу в ширину экрана */
+  if(!window._fitBound){ window._fitBound=true; window.addEventListener('resize',scheduleFit); }
+}
+
+/* ═══════════ АВТО-ВПИСЫВАНИЕ ТАБЛИЦЫ P&L В ШИРИНУ ЭКРАНА ═══════════
+   При добавлении колонок («без Баллов», «+ прошлый год») таблица становится
+   шире экрана. Вместо горизонтального скролла ПРОПОРЦИОНАЛЬНО уменьшаем всю
+   таблицу через CSS zoom. Нижний предел — 50%: если и в него не влезли,
+   оставляем обычный горизонтальный скролл (штатный overflow обёртки .sw).
+   Почему zoom, а не transform:scale — zoom ужимает и раскладку тоже, поэтому
+   не остаётся пустоты снизу и не ломается вертикальный скролл в срезе «Артикул». */
+const FIT_MIN=0.5;
+
+/* Чистая арифметика масштаба (вынесена, чтобы её можно было тестировать):
+   natW — натуральная ширина таблицы, avail — доступная ширина обёртки. */
+function fitScale(natW, avail, MIN){
+  MIN = MIN||FIT_MIN;
+  if(!natW || !avail) return {scale:1, mode:'none'};   /* нечего мерить */
+  const s = avail/natW;
+  if(s >= 1)   return {scale:1,   mode:'none'};         /* влезает как есть */
+  if(s >= MIN) return {scale:s,   mode:'fit'};          /* ужимаем и влезает */
+  return {scale:MIN, mode:'scroll'};                    /* упёрлись в предел → скролл */
+}
+
+function fitMatrix(){
+  const mx=document.getElementById('matrix');
+  if(!mx) return;
+  const wrap=(mx.closest&&mx.closest('.sw'))||mx.parentNode;
+  if(!wrap) return;
+
+  mx.style.zoom='';                        /* сброс перед замером натуральной ширины */
+  const natW=mx.scrollWidth;               /* ширина таблицы как есть */
+  const avail=wrap.clientWidth;            /* сколько места на экране */
+
+  const {scale,mode}=fitScale(natW, avail, FIT_MIN);
+  /* mode==='none'  → влезает, zoom не нужен (сброшено выше)
+     mode==='fit'   → ужимаем zoom'ом, горизонтальный скролл пропадает сам
+     mode==='scroll'→ даже при 50% не влезло: ужимаем до 50%, остальное — штатный
+                      горизонтальный скролл обёртки .sw (overflow-x:auto из CSS) */
+  mx.style.zoom = (mode==='none') ? '' : scale;
+}
+
+let _fitRAF=null;
+function scheduleFit(){
+  if(_fitRAF)cancelAnimationFrame(_fitRAF);
+  _fitRAF=requestAnimationFrame(()=>{ _fitRAF=null; fitMatrix(); });
 }
 
 /* ═══════════ НАЧИСЛЕНИЯ OZON ПОСТРОЧНО ═══════════
