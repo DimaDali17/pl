@@ -5,11 +5,21 @@ function renderInsights(el,y,q){
   const lastM=(y<nowY)?12:(nowM-1);
   if(lastM<1){ el.innerHTML='<div class="scaffold">Для '+y+' ещё нет завершённых месяцев для анализа.</div>'; return; }
   const mName=MONTHS[lastM-1];
-  const A=meas(y,[lastM],searchOK);
+  /* ── Ozon: инсайты считаем от «выручки без баллов» = Выручка + Возврат + Партнёры
+     (поле taxBase). Прибыль в ₽ база-независима (баллы — это переклассификация из
+     выручки, прибыль не меняют), поэтому меняются только сама выручка и проценты
+     «от выручки»: рентабельность, доставка%, хранение%, ДРР, цена выкупа.
+     Только чистый Ozon — не Консолидация (иначе из базы выпадет выручка WB). */
+  const OZ=(typeof curCo!=='undefined'&&curCo==='OZON');
+  const ozAdj=m=>{ if(!OZ||!m)return m; const R=m.taxBase;
+    return Object.assign({},m,{ vykr:R, cena:DIV(R,m.vyks),
+      pribFactP:DIV(m.pribFact,R), dostP:DIV(m.dost,R), hranP:DIV(m.hran,R),
+      drrSa:DIV(m.rek,R), drr:DIV(m.rek,R) }); };
+  const A=ozAdj(meas(y,[lastM],searchOK));
   const pm=lastM>1?{yy:y,mm:lastM-1}:{yy:y-1,mm:12};
-  const P=meas(pm.yy,[pm.mm],searchOK), Yq=meas(y-1,[lastM],searchOK);
+  const P=ozAdj(meas(pm.yy,[pm.mm],searchOK)), Yq=ozAdj(meas(y-1,[lastM],searchOK));
   const ytdM=[];for(let i=1;i<=lastM;i++)ytdM.push(i);
-  const YT=meas(y,ytdM,searchOK), YTp=meas(y-1,ytdM,searchOK);
+  const YT=ozAdj(meas(y,ytdM,searchOK)), YTp=ozAdj(meas(y-1,ytdM,searchOK));
   const pc=(c,p)=>{ if(p==null||!isFinite(p)||p===0)return null; return (c-p)/Math.abs(p); };
   const ar=(c,p)=>{ const d=pc(c,p); if(d==null)return '<span style="color:var(--ink3)">н/д</span>'; return `<span class="${d>=0?'pos':'neg'}">${d>=0?'▲ +':'▼ '}${(d*100).toFixed(0)}%</span>`; };
   const pp=(c,p)=>{ const d=(c-p)*100; return `<span class="${d>=0?'pos':'neg'}">${d>=0?'+':''}${d.toFixed(1)} п.п.</span>`; };
@@ -21,9 +31,9 @@ function renderInsights(el,y,q){
   const block=(ttl,lines,full)=>`<div class="insb${full?' full':''}"><div class="insh">${ttl}</div>${lines.map(t=>`<div class="insl">${t}</div>`).join('')}</div>`;
 
   el.innerHTML=`
-    <div class="sh"><div class="st">Инсайты · ${mName} ${y}</div><div class="sm2">последний завершённый месяц · пересказ таблиц и графиков (генерируется автоматически)</div></div>
+    <div class="sh"><div class="st">Инсайты · ${mName} ${y}</div><div class="sm2">последний завершённый месяц · пересказ таблиц и графиков (генерируется автоматически)${OZ?' · Ozon: выручка и проценты — без баллов':''}</div></div>
     <div class="mg" style="margin-bottom:16px">
-      ${card('Выручка (Выкуп,руб)',fi(A.vykr),`м/м ${ar(A.vykr,P.vykr)} · г/г ${ar(A.vykr,Yq.vykr)}`)}
+      ${card(OZ?'Выручка (без баллов)':'Выручка (Выкуп,руб)',fi(A.vykr),`м/м ${ar(A.vykr,P.vykr)} · г/г ${ar(A.vykr,Yq.vykr)}`)}
       ${card('Прибыль.Факт (асс.)',fi(A.pribFact),`м/м ${ar(A.pribFact,P.pribFact)} · г/г ${ar(A.pribFact,Yq.pribFact)}`)}
       ${card('Рентабельность',fp(A.pribFactP),`м/м ${pp(A.pribFactP,P.pribFactP)}`)}
       ${card('Выкупаемость',fp(A.vkp),`м/м ${pp(A.vkp,P.vkp)}`)}
