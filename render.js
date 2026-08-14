@@ -82,12 +82,14 @@ function ensureOrdBtn(){
 function ensureOzBtn(){
   const py=document.getElementById('pyBtn'); if(!py)return;
   let b=document.getElementById('ozBtn');
-  const need=(curCo==='OZON'||curCo==='CONS');
+  const need=(curCo==='OZON');   /* только Ozon: у Консолид база без баллов неоднозначна */
   if(!b&&need){
     b=document.createElement('button');
     b.id='ozBtn'; b.className=py.className;
-    b.title='Приставляет справа второй набор колонок: выручка без баллов Ozon, '
-      +'комиссия = Вознаграждение − Баллы, ДРЛ% и ДРР% от неё же. Основные колонки не меняются.';
+    b.title='Пересчитывает те же колонки на «выручку без баллов» Ozon '
+      +'(Выручка + Возврат + Программы партнёров, баллы за скидки исключены): '
+      +'выручка, Ср.Чек, Ком%, ДРЛ%, ДРР%, Оп%, Ф%. Комиссия показывается реальной '
+      +'(Вознаграждение − Баллы). Прибыль в ₽ не меняется. Отдельные колонки не добавляются.';
     b.textContent='＋ без Баллов';
     b.onclick=toggleNoBonus;
     py.parentNode.insertBefore(b,py.nextSibling);
@@ -97,16 +99,31 @@ function ensureOzBtn(){
          b.textContent=(need&&noBonus)?'✓ без Баллов':'＋ без Баллов'; }
 }
 
-/* Колонки: основные + (по кнопке) набор «без Баллов» справа */
-function activeCols(){
-  const nb=(curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus;
-  if(!nb)return COLS;
-  const byK={}; COLS_NB.forEach(c=>byK[c.k]=c);
-  const out=[];
-  COLS.forEach(c=>{ out.push(c);
-    const nbk=NB_AFTER[c.k];               /* парная колонка встаёт сразу справа */
-    if(nbk&&byK[nbk])out.push(byK[nbk]); });
-  return out;
+/* Колонки: всегда основной набор. Режим «без Баллов» больше НЕ добавляет
+   парные ᴮᴮ-колонки — вместо этого значения в тех же колонках пересчитываются
+   на «выручку без баллов» (см. nbAdjustOz в render()). Только для Ozon. */
+function activeCols(){ return COLS; }
+
+/* Пересчёт одной строки P&L на «выручку без баллов» для Ozon.
+   База R = taxBase = Выручка + Возврат + Программы партнёров (баллы исключены).
+   Комиссия показывается реальной = Вознаграждение − Баллы (партнёры остаются в
+   выручке, поэтому из комиссии их НЕ вычитаем). Суммы в ₽ (Пр.Опер, Пр.Факт и
+   все расходы) не меняются: баллы уходят и из выручки, и из комиссии — прибыль
+   та же, а таблица сходится. Меняются только выручка, комиссия и проценты. */
+function nbAdjustOz(v){
+  if(!v) return v;
+  const R=v.taxBase;
+  const kom=v.komNom-v.bonus;                 /* реальная комиссия */
+  return Object.assign({},v,{
+    vykr:R,
+    cena:DIV(R,v.vyks),
+    kom:kom, komP:DIV(kom,R),
+    drl:DIV(v.dost,R), drr:DIV(v.rek,R),
+    dostP:DIV(v.dost,R), hranP:DIV(v.hran,R), drrSa:DIV(v.rek,R),
+    pribOperP:DIV(v.pribOper,R), pribFactP:DIV(v.pribFact,R),
+    bonusP:DIV(v.bonus,R)
+    /* pribOper, pribFact, kom-как-число расходов и все ₽-суммы — без изменений */
+  });
 }
 /* Универсальные подписи в навигации: «Комиссия ВБ» → «Комиссия», прочие ВБ → МП */
 function fixNavLabels(){
@@ -164,6 +181,13 @@ function render(){
     ? {label:'Всего за всё время',v:meas(0,slicerMonths,searchOK),py:null}
     : {label:'Всего',v:meas(y,totMonths,searchOK),py:(pyOn&&y)?meas(y-1,totMonths,searchOK):null};
 
+  /* Режим «без Баллов» (только Ozon): пересчитываем строки на выручку без баллов.
+     Колонки не добавляются — меняются значения в тех же колонках. */
+  if(typeof noBonus!=='undefined' && noBonus && curCo==='OZON'){
+    rows.forEach(r=>{ r.v=nbAdjustOz(r.v); if(r.py)r.py=nbAdjustOz(r.py); });
+    tot.v=nbAdjustOz(tot.v); if(tot.py)tot.py=nbAdjustOz(tot.py);
+  }
+
   /* max для баров */
   const CL=activeCols();
   const mx={};CL.filter(c=>c.bar).forEach(c=>mx[c.k]=Math.max(1,...rows.map(r=>Math.abs(r.v[c.k]))));
@@ -214,7 +238,7 @@ function render(){
   const ymLbl=(grpMode==='ym')?('вся история'+(selMonths.size&&selMonths.size<12
       ?' · только '+[...selMonths].sort((a,b)=>a-b).map(m=>MONTHS[m-1].slice(0,3)).join(','):'')):'';
   const ordLbl=(typeof byOrder!=='undefined'&&byOrder&&curCo!=='OZON')?' · по дате заказа':'';
-  const ozLbl=((curCo==='OZON'||curCo==='CONS')&&typeof noBonus!=='undefined'&&noBonus)?' · + колонки без баллов':'';
+  const ozLbl=((curCo==='OZON')&&typeof noBonus!=='undefined'&&noBonus)?' · выручка без баллов':'';
   document.getElementById('matrixSub').textContent=(ymLbl||(y?`год ${y}${msLbl}`:`за всё время${msLbl}`))+(q?' · '+q:'')+ordLbl+ozLbl;
   document.getElementById('fInfo').textContent=`Общий: ${M.obshiy.length} строк`;
 
