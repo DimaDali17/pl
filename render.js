@@ -61,22 +61,9 @@ function ensureNbStyle(){
 }
 
 function ensureOrdBtn(){
-  const py=document.getElementById('pyBtn'); if(!py)return;
-  let b=document.getElementById('ordBtn');
-  const need=(curCo!=='OZON');   /* у Ozon даты заказа в начислениях нет */
-  if(!b&&need){
-    b=document.createElement('button');
-    b.id='ordBtn'; b.className=py.className;
-    b.title='Выкупы и выручку привязать к дате ЗАКАЗА покупателем, а не к дате продажи. '
-      +'Выкупаемость становится когортной, месяцы сходятся с report/PBI. '
-      +'Логистика, хранение, комиссия, налог остаются по дате продажи.';
-    b.textContent='＋ по дате заказа';
-    b.onclick=toggleByOrder;
-    py.parentNode.insertBefore(b,py.nextSibling);
-  }
-  if(b){ b.style.display=need?'':'none';
-         b.classList.toggle('act',need&&typeof byOrder!=='undefined'&&byOrder);
-         b.textContent=(need&&byOrder)?'✓ по дате заказа':'＋ по дате заказа'; }
+  /* Кнопка «＋ по дате заказа» убрана полностью (по запросу).
+     Режим byOrder остаётся выключенным и недоступным из UI. */
+  const b=document.getElementById('ordBtn'); if(b)b.remove();
 }
 
 function ensureOzBtn(){
@@ -294,7 +281,7 @@ function scheduleFit(){
    Показываем, за что именно Ozon списал: тип начисления и группа услуг — как их
    отдаёт сам Ozon, — плюс колонка «куда учтено» (в какую статью P&L строка легла).
    Ничего не пересчитывает: это просмотр исходных начислений.
-   Виден только для Ozon и Консолидации, под основной таблицей P&L. */
+   Виден только для Ozon, под основной таблицей P&L. */
 function ozLinesData(){
   return (M.co&&M.co.OZON&&M.co.OZON.ozLines)||M.ozLines||[];
 }
@@ -308,7 +295,7 @@ function ensureOzBox(){
 }
 function renderOzLines(){
   const box=ensureOzBox(); if(!box)return;
-  if(curCo!=='OZON'&&curCo!=='CONS'){ box.innerHTML=''; return; }
+  if(curCo!=='OZON'){ box.innerHTML=''; return; }   /* только Ozon; на Консолид не показываем */
   const src=ozLinesData();
   if(!src.length){ box.innerHTML=''; return; }
 
