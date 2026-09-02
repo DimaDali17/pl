@@ -300,7 +300,7 @@ async function buildModel(textsOverride){
     const TAX=new Date(2026,1,1); const out=[];
     rr.forEach(r=>{ const d=pdate(r[c_den]); if(!d)return; const post=(r[c_post]||'').trim();
       const rec=artByPostL.get(lnk(post))||artByPostA.get(nk(post)); const paG=rec?rec.paG:('#'+post);
-      const perech=num(r[c_per]); const nalog=taxFlat!=null?Math.round(perech*taxFlat):Math.round(perech*(d>=TAX?0.12:0.07));
+      const perech=num(r[c_per]); const nalog=taxFlat!=null?Math.round(perech*taxFlat):Math.round(perech*(d>=TAX?(0.06+5/105):0.06));
       out.push({date:d,paG,zaks:intn(r[c_zaks]),vyks:intn(r[c_vyks]),zakr:num(r[c_zakr]),vykr:perech,kom:0,nalog}); });
     return out;
   }
@@ -403,9 +403,16 @@ async function buildModel(textsOverride){
     });
   }
 
-  /* ставки налога: EF переходит на 12% с 01.02.2026, EZFR всегда 7% */
-  const TAX_EF=(y,m)=>((y>2026||(y===2026&&m>=2))?0.12:0.07);
-  const TAX_EZ=()=>0.07;
+  /* Ставки налога:
+     УСН = 6% везде. С 01.02.2026 у EF и Ozon добавляется НДС 5%, ВЫДЕЛЯЕМЫЙ из
+     цены (НДС уже сидит внутри выручки): НДС = база × 5/105, а не база × 5%.
+     УСН при этом берётся с полной выручки (Вариант 2). EZFR — 6% всегда, без НДС.
+     Итог с 01.02.2026 у EF/Ozon: 6% + 5/105 ≈ 10,76% ; до даты и у EZFR: 6%. */
+  const USN=0.06;                                    /* УСН */
+  const VAT_IN=5/105;                                /* выделение НДС 5% из суммы с НДС ≈ 4,762% */
+  const VAT_ON=(y,m)=>(y>2026||(y===2026&&m>=2));    /* НДС действует с 01.02.2026 */
+  const TAX_EF=(y,m)=>USN+(VAT_ON(y,m)?VAT_IN:0);    /* EF:  6% + (с 01.02.2026) НДС 5/105 */
+  const TAX_EZ=()=>USN;                              /* EZFR: 6% всегда, без НДС */
 
   const salesEF=parseSales(raw.report,null);
   {const byY={};
@@ -416,7 +423,7 @@ async function buildModel(textsOverride){
      msg:`заказов ${rz.toLocaleString('ru-RU')} шт · выкупов ${rv.toLocaleString('ru-RU')} шт`
        +` · выкупы по годам: ${ry.map(y=>y+':'+byY[y].v.toLocaleString('ru-RU')).join(' · ')}`});}
   /* EZFR: если есть еженедельный финотчёт — берём оттуда, иначе старый report2 */
-  const salesEZ=parseSales(raw.report2,0.07);
+  const salesEZ=parseSales(raw.report2,0.06);   /* EZFR: УСН 6% всегда, без НДС */
   const ezOwn=xRows2.length>0;   /* у EZFR своя бухгалтерия (лист Расход EZFR) */
   const setEF=new Set(salesEF.map(r=>lnk(r.paG))), setEZ=new Set(salesEZ.map(r=>lnk(r.paG)));
   const xEF=[],xEZ=[];
@@ -751,7 +758,8 @@ async function buildModel(textsOverride){
   /* ── parseWBFin: еженедельный финотчёт WB → схема P&L (вариант Б: gross + комиссия) ── */
   /* Логистика WB = Доставка + ПВЗ + Возмещение издержек + Приёмка                   */
   /* Хранение отдельно                                                               */
-  /* taxFn(y,m) → ставка налога. EZFR: всегда 7%. EF: 7% до 01.02.2026, далее 12%.   */
+  /* taxFn(y,m) → ставка налога. EZFR: всегда 6% (УСН). EF: 6% до 01.02.2026,
+     далее 6% + выделяемый НДС 5% (×5/105).                                    */
   /* ДВА ФОРМАТА: новый (русские заголовки) и старый бэкап 2021-2024 (английские).
      Значения полей в обоих форматах русские (Продажа/Возврат/Логистика),
      поэтому достаточно алиасов заголовков. Чего в старом формате НЕТ вовсе:
@@ -1104,7 +1112,7 @@ async function buildModel(textsOverride){
         zaks:o.zaks,zaksAlt:o.zaksAlt,vyks:o.vyks,zakr,vykr,
         kom,komp,rek:0,post:0,
         /* налог с того, что реально пришло: К перечислению + компенсации */
-        nalog:Math.round((net+komp)*(taxFn?taxFn(o.y,o.m):0.07)),
+        nalog:Math.round((net+komp)*(taxFn?taxFn(o.y,o.m):0.06)),
         hran:0,dost:Math.round(o.dost),perem:0,
         /* ── детализация для «Разбор» / «Комиссия ВБ» ── */
         ekvBill,                          /* эквайринг отдельным счётом (НЕ удержан из выплаты) */
@@ -1300,7 +1308,8 @@ async function buildModel(textsOverride){
                     Как и у WB в 2022–2023, комиссия может уйти в минус — это норма.
        НАЛОГ      = с базы «Выручка + Возврат выручки + Программы партнёров».
                     Баллы за скидки в базу НЕ входят (в отличие от Выкуп,руб).
-                    Ставка: 7% до 01.02.2026, далее 12%. */
+                    УСН 6%; с 01.02.2026 добавляется НДС 5%, ВЫДЕЛЯЕМЫЙ из цены
+                    (× 5/105, а не × 5%). Итого ≈ 10,76% с 01.02.2026, 6% до. */
     const vals=Object.values(map);
     const T={sales:0,bonus:0,ret:0,partner:0,kom:0,komReal:0,vykr:0,tax:0}; const TY={};
     const out=vals.map(o=>{
@@ -1338,7 +1347,7 @@ async function buildModel(textsOverride){
             taxBase,
             rek:Math.round(-o.rek),
             post:0,
-            nalog:Math.round(taxBase*((o.y>2026||(o.y===2026&&o.m>=2))?0.12:0.07)),
+            nalog:Math.round(taxBase*((o.y>2026||(o.y===2026&&o.m>=2))?(0.06+5/105):0.06)),
             hran:0,
             dost:Math.round(-o.log),
             perem:Math.round(rsFor(o)*o.salesQty)
