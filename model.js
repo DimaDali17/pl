@@ -799,9 +799,9 @@ async function buildModel(textsOverride){
        Привязка к месяцу по «Дате продажи» (как выкупы), чтобы месяцы сходились.
        В СТАРОМ формате колонка «Виды логистики» пустая на всех строках → фолбэк ниже. */
     const c_dostQty=col(H,'Количество доставок','Number of Deliveries');
-    const c_logType=col(H,'Виды логистики, штрафов и корректировок ВВ','Виды логистики','Types of Logistics, Fines, and Additional Payments');
+    const c_logType=col(H,'Виды логистики, штрафов и корректировок ВВ','Виды доставок, штрафов и корректировок ВВ','Виды логистики','Виды доставок','Types of Logistics, Fines, and Additional Payments');
     const c_pvz=col(H,'Возмещение за выдачу и возврат товаров на ПВЗ','Compensation for the issuance and return of goods at PVZ');
-    const c_vozmesh=col(H,'Возмещение издержек по перевозке/по складским операциям с товаром','Compensation for Transportation Costs');
+    const c_vozmesh=col(H,'Возмещение издержек по перевозке/по складским операциям с товаром','Возмещение издержек по перемещению и операционной обработке товара','Compensation for Transportation Costs');
     const c_priemka=col(H,'Операции на приемке','Операции на приёмке');   /* нет в старом формате */
     const c_hran=col(H,'Хранение');                                       /* нет в старом формате */
     const c_uderz=col(H,'Удержания');                                     /* нет в старом формате */
@@ -944,8 +944,10 @@ async function buildModel(textsOverride){
         o.ekvBill   += sg*(ekvBilled?ekvV:0);   /* выставлен счётом — вне kom */
         o.pvz       += sg*num(r[c_pvz]);
       }
-      /* ── Логистика (доставка по артикулам) ── */
-      else if(reason==='Логистика'){
+      /* ── Логистика/Доставка (по артикулам) ──
+         WB с сентября 2026 переименовал обоснование «Логистика» → «Доставка»
+         (и заголовки «Виды логистики»→«Виды доставок» и т.п.). Принимаем оба. */
+      else if(reason==='Логистика'||reason==='Доставка'){
         if(!art)return;
         const paG=resolveArt(art,pred);
         const o=getOrCreate(k_ym+'|'+paG,paG,d);
@@ -968,7 +970,8 @@ async function buildModel(textsOverride){
       else if(reason==='Возмещение за выдачу и возврат товаров на ПВЗ'){
         const b=refX[d.getFullYear()]||(refX[d.getFullYear()]={pvz:0,vozm:0,obr:0,n:0}); b.pvz+=num(r[c_pvz]); b.n++;
       }
-      else if(reason==='Возмещение издержек по перевозке/по складским операциям с товаром'){
+      else if(reason==='Возмещение издержек по перевозке/по складским операциям с товаром'
+           || reason==='Возмещение издержек по перемещению и операционной обработке товара'){
         const b=refX[d.getFullYear()]||(refX[d.getFullYear()]={pvz:0,vozm:0,obr:0,n:0}); b.vozm+=num(r[c_vozmesh]); b.n++;
       }
       else if(reason==='Обработка товара'){
@@ -1039,7 +1042,7 @@ async function buildModel(textsOverride){
     /* Диагностика видов логистики: какие формулировки реально встречаются */
     if(c_logType){
       const lt={};
-      rr.forEach(r=>{ if((r[c_reason]||'').trim()!=='Логистика')return;
+      rr.forEach(r=>{ const rs=(r[c_reason]||'').trim(); if(rs!=='Логистика'&&rs!=='Доставка')return;
         const d=pdate(r[c_date]); if(!d)return;
         const k=d.getFullYear()+' '+(String(r[c_logType]||'').trim()||'(пусто)');
         lt[k]=(lt[k]||0)+intn(r[c_dostQty]); });
