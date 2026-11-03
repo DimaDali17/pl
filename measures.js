@@ -1,7 +1,7 @@
 /* ═══════════ ДВИЖОК МЕР ═══════════ */
 const DIV=(a,b)=>b?a/b:0;
 const prevMonth=(y,m)=>m===1?{y:y-1,m:12}:{y,m:m-1};
-function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:0,dost:0,perem:0,
+function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,shtraf:0,post:0,nalog:0,hran:0,dost:0,perem:0,
     rozn:0,vv:0,vvNds:0,ekvair:0,pvz:0,komOther:0,rekWB:0,rekMP:0,rekBlog:0,komp:0,ekvBill:0,
     komNom:0,bonus:0,partner:0,taxBase:0,cash:0};
   const ordMode=byOrder;
@@ -18,7 +18,7 @@ function agg(y,mset,filt){ const a={zaks:0,zaksRep:0,vyks:0,zakr:0,vykr:0,kom:0,
       if((!y||r.y===y)&&(!mset||mset.has(r.m))){ a.vyks+=r.vyks; a.vykr+=r.vykr; }
     }
     if(y&&r.y!==y)continue; if(mset&&!mset.has(r.m))continue;
-    a.zaks+=r.zaks;a.zaksRep+=(r.zaksRep||0);a.zakr+=r.zakr;a.kom+=(r.kom||0);a.rek+=r.rek;a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem;
+    a.zaks+=r.zaks;a.zaksRep+=(r.zaksRep||0);a.zakr+=r.zakr;a.kom+=(r.kom||0);a.rek+=r.rek;a.shtraf+=(r.shtraf||0);a.post+=r.post;a.nalog+=r.nalog;a.hran+=r.hran;a.dost+=r.dost;a.perem+=r.perem;
     /* детализация комиссии (есть только у WB-финотчёта; у EF/Ozon — 0) */
     a.komp+=(r.komp||0);a.ekvBill+=(r.ekvBill||0);
     a.rekWB+=(r.rekWB||0);a.rekMP+=(r.rekMP||0);a.rekBlog+=(r.rekBlog||0);
@@ -58,7 +58,7 @@ function meas(y,mArr,filt){
      это ДОХОД, прибавляется */
   const pribOper=vykr-kom-a.perem-a.dost-a.hran-a.nalog+a.komp;
   const postAkr=pR+acr;
-  const pribFact=vykr-kom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr+a.komp;
+  const pribFact=vykr-kom-a.perem-a.dost-a.hran-pR-rek-a.shtraf-a.nalog-acr+a.komp;
   /* ДРР: у маркетплейсов с баллами знаменатель — выручка (Выручка+Баллы), а не Заказ,руб */
   const isOZ=(curCo==='OZON')||(curCo==='CONS'&&a.komNom!==0);
   const drrBase = isOZ ? vykr : a.zakr;
@@ -66,11 +66,11 @@ function meas(y,mArr,filt){
   const nbVykr=a.cash;
   const nbKom=a.komNom-a.bonus-a.partner;
   const nbPribOper=nbVykr-nbKom-a.perem-a.dost-a.hran-a.nalog+a.komp;
-  const nbPribFact=nbVykr-nbKom-a.perem-a.dost-a.hran-pR-rek-a.nalog-acr+a.komp;
+  const nbPribFact=nbVykr-nbKom-a.perem-a.dost-a.hran-pR-rek-a.shtraf-a.nalog-acr+a.komp;
   return {zaks:a.zaks,vyks:a.vyks,vkp:DIV(a.vyks,a.zaks),zakr:a.zakr,vykr,cena:DIV(vykr,a.vyks),
     byOrder:!!byOrder,
     perem:a.perem,dost:a.dost,drl:DIV(a.dost,vykr),hran:a.hran,kom,komP:DIV(kom,vykr),nalog:a.nalog,
-    pribOper,pribOperP:DIV(pribOper,vykr),postAkr,rek,drr:DIV(rek,drrBase),
+    pribOper,pribOperP:DIV(pribOper,vykr),postAkr,rek,drr:DIV(rek,drrBase),shtraf:a.shtraf,
     pribFact,pribFactP:DIV(pribFact,vykr),
     advCPO:DIV(rek,a.zaks),advCPS:DIV(rek,a.vyks),drrSa:DIV(rek,vykr),
     logCPS:DIV(a.dost,a.vyks),stockCPS:DIV(a.hran,a.vyks),dostP:DIV(a.dost,vykr),hranP:DIV(a.hran,vykr),
@@ -166,7 +166,8 @@ const COLS=[
   COL('postAkr','Пост+акр',fi,'Постоянные расходы (лист Расход, «Что» = «Пост расходы», поартикульно; если за месяц не проведены — 0, без подстановки из прошлого месяца) + Акруалс (лист Acruals). Отдельный лист «Пост» больше не используется.'),
   COL('rek','Реклама',fi,'Реклама из листа Расход (группа «Реклама»): площадка (WB Продвижение/Джем) + блогеры/интеграции. Удержания WB из финотчёта показаны справочно во вкладке «Реклама», в прибыль не входят.'),
   COL('drr','ДРР%',fp1,'Доля рекламы = Реклама ÷ Заказ,руб.'),
-  COL('pribFact','Пр.Факт(асс)',fi,'Чистая прибыль = Пр.Опер − Пост+акр − Реклама. Полностью: Выкуп,руб − Ком.МП − Переменные − Доставка − Хранение − Налог − Пост.Р − Акруалс − Реклама + Компенсации.',{bar:'pf'}),
+  COL('shtraf','Штрафы',fi,'Штрафы WB из финотчёта (недовоз/перенос поставки, невыполненный заказ и пр.). Берутся ТОЛЬКО из финотчёта; если штраф завести в лист Расход, он отбрасывается (см. диагностику), чтобы не задваивать.'),
+  COL('pribFact','Пр.Факт(асс)',fi,'Чистая прибыль = Пр.Опер − Пост+акр − Реклама − Штрафы. Полностью: Выкуп,руб − Ком.МП − Переменные − Доставка − Хранение − Налог − Пост.Р − Акруалс − Реклама − Штрафы + Компенсации.',{bar:'pf'}),
   COL('pribFactP','Ф%',fp,'Чистая прибыль ÷ Выкуп,руб.',{hl:1})
 ];
 

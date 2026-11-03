@@ -236,16 +236,26 @@ async function buildModel(textsOverride){
     const H=rr._headers;
     const x_date=col(H,'Дата'),x_pa=col(H,'Предмет;Артикул продавца','Предмет;Артикул.Глубина','Предмет;Артикул поставщика'),
       x_chto=col(H,'Что'),x_grp=col(H,'Что (группа)','Что группа'),x_kon=col(H,'Конкретнее'),x_sum=col(H,'Сумма');
-    return rr.map(r=>{ const s=num(r[x_sum]);
+    let shListSum=0,shListN=0;   /* штрафы, по ошибке заведённые в лист — отбрасываем (см. ниже) */
+    const out=rr.map(r=>{ const s=num(r[x_sum]);
       const isRek=String(r[x_grp]||'').trim()==='Реклама';
       const isPost=String(r[x_chto]||'').trim()==='Пост расходы';
       const kon=x_kon?String(r[x_kon]||'').trim():'';
-      const rek=isRek?s:0;
-      const rekMP=(isRek&&RE_MP.test(kon))?s:0;
-      const rekBlog=isRek?s-rekMP:0;
+      /* Защита от задвоения: штрафы берём ТОЛЬКО из финотчёта (колонка «Штрафы»).
+         Если в листе Расход завели строку-штраф (в «Конкретнее» есть «штраф»),
+         НЕ считаем её ни рекламой, ни переменными — иначе штраф задвоится. */
+      const isShtrafLine=/штраф/i.test(kon);
+      if(isShtrafLine){ shListSum+=s; shListN++; }
+      const rek=(isRek&&!isShtrafLine)?s:0;
+      const rekMP=(isRek&&!isShtrafLine&&RE_MP.test(kon))?s:0;
+      const rekBlog=(isRek&&!isShtrafLine)?s-rekMP:0;
       const post=isPost?s:0;
+      const per=isShtrafLine?0:(s-rek-post);   /* штраф-строку не кладём и в переменные */
       /* умная сцепка: приводим ключ расхода к канону справочника */
-      return {date:pdate(r[x_date]),pa:resolvePA(r[x_pa]),kon,rek,rekMP,rekBlog,post,per:s-rek-post}; }).filter(r=>r.date);
+      return {date:pdate(r[x_date]),pa:resolvePA(r[x_pa]),kon,rek,rekMP,rekBlog,post,per}; }).filter(r=>r.date);
+    if(shListN)diag.push({name:'Штрафы в листе Расход (отброшены)',status:'warn',rows:shListN,
+      msg:`${shListN} строк со словом «штраф» в «Конкретнее» отброшены (Σ ${Math.round(shListSum).toLocaleString('ru-RU')} ₽), чтобы не задваивать: штрафы берутся из финотчёта в колонку «Штрафы».`});
+    return out;
   }
   const xRows =parseRashod(raw.rashod);
   const xRows2=parseRashod(raw.rashod2);   /* своя бухгалтерия EZFR */
@@ -1160,7 +1170,7 @@ async function buildModel(textsOverride){
       if(t.hran) out.push({paG:'(Хранение)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,post:0,nalog:0,hran:Math.round(t.hran),dost:0,perem:0});
       /* rekWB дублирует rek: если у EZFR своя бухгалтерия, rek гасится, а rekWB остаётся для справки */
       if(t.rek)  out.push({paG:'(Удержания WB)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.rek),rekWB:Math.round(t.rek),post:0,nalog:0,hran:0,dost:0,perem:0});
-      if(t.shtraf) out.push({paG:'(Штрафы)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.shtraf),post:0,nalog:0,hran:0,dost:0,perem:0});
+      if(t.shtraf) out.push({paG:'(Штрафы)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:0,shtraf:Math.round(t.shtraf),post:0,nalog:0,hran:0,dost:0,perem:0});
     }
     /* ДИАГНОСТИКА: штрафы из финотчёта по годам. Сейчас они учтены ВНУТРИ
        «Рекламы» (строка «(Штрафы)» выше). Нужна, чтобы оценить масштаб и
@@ -1168,9 +1178,9 @@ async function buildModel(textsOverride){
     {const shY={}; let shTot=0;
      for(const t of Object.values(totals)){ if(t.shtraf){ shY[t.y]=(shY[t.y]||0)+t.shtraf; shTot+=t.shtraf; } }
      const yrs=Object.keys(shY).sort();
-     diag.push({name:'Штрафы по годам (в «Рекламе»)',status:shTot?'warn':'ok',rows:yrs.length,
+     diag.push({name:'Штрафы по годам',status:shTot?'warn':'ok',rows:yrs.length,
        msg:shTot?yrs.map(y=>`${y}: ${Math.round(shY[y]).toLocaleString('ru-RU')} ₽`).join(' · ')
-           +` ║ Σ ${Math.round(shTot).toLocaleString('ru-RU')} ₽ · сейчас сидят ВНУТРИ «Рекламы» строкой «(Штрафы)»`
+           +` ║ Σ ${Math.round(shTot).toLocaleString('ru-RU')} ₽ · из финотчёта, выведены отдельной колонкой «Штрафы»`
          :'штрафов в финотчёте нет'});}
     /* Разрез по размерам едет свойством массива out → далее в co.<K>.ob.
        Массив это объект, поле переживёт .concat при сборке CONS. */
