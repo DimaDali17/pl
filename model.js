@@ -1162,6 +1162,16 @@ async function buildModel(textsOverride){
       if(t.rek)  out.push({paG:'(Удержания WB)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.rek),rekWB:Math.round(t.rek),post:0,nalog:0,hran:0,dost:0,perem:0});
       if(t.shtraf) out.push({paG:'(Штрафы)',y:t.y,m:t.m,zaks:0,vyks:0,zakr:0,vykr:0,kom:0,rek:Math.round(t.shtraf),post:0,nalog:0,hran:0,dost:0,perem:0});
     }
+    /* ДИАГНОСТИКА: штрафы из финотчёта по годам. Сейчас они учтены ВНУТРИ
+       «Рекламы» (строка «(Штрафы)» выше). Нужна, чтобы оценить масштаб и
+       решить, выделять ли штрафы в отдельную колонку. Цифры P&L не меняет. */
+    {const shY={}; let shTot=0;
+     for(const t of Object.values(totals)){ if(t.shtraf){ shY[t.y]=(shY[t.y]||0)+t.shtraf; shTot+=t.shtraf; } }
+     const yrs=Object.keys(shY).sort();
+     diag.push({name:'Штрафы по годам (в «Рекламе»)',status:shTot?'warn':'ok',rows:yrs.length,
+       msg:shTot?yrs.map(y=>`${y}: ${Math.round(shY[y]).toLocaleString('ru-RU')} ₽`).join(' · ')
+           +` ║ Σ ${Math.round(shTot).toLocaleString('ru-RU')} ₽ · сейчас сидят ВНУТРИ «Рекламы» строкой «(Штрафы)»`
+         :'штрафов в финотчёте нет'});}
     /* Разрез по размерам едет свойством массива out → далее в co.<K>.ob.
        Массив это объект, поле переживёт .concat при сборке CONS. */
     out.sizeAgg=sizeAgg;
